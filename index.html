@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ClinSearch — Medical Literature AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{
+  --bg:#080c12;--s1:#0f1621;--s2:#151f2e;--b1:#1a2638;--b2:#243347;
+  --text:#dce8f4;--muted:#6a8099;--dim:#3a5068;
+  --accent:#00d4aa;--a2:#0096d4;--gold:#e8b84b;--red:#f05c5c;
+  --green:#3ecf8e;--blue:#5b8fd4;--purple:#9b8fd4;
+  --serif:'Libre Baskerville',Georgia,serif;
+  --sans:'DM Sans',system-ui,sans-serif;
+  --mono:'DM Mono',monospace;
+  --r:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,170,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,170,.02) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+
+/* ── Header ── */
+header{display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;height:52px;border-bottom:1px solid var(--b1);background:rgba(8,12,18,.92);backdrop-filter:blur(16px);flex-shrink:0;position:relative;z-index:100}
+.logo{display:flex;align-items:center;gap:.55rem;font-family:var(--serif);font-size:1.1rem;color:var(--text)}
+.logo-mark{width:22px;height:22px;background:var(--accent);border-radius:5px;display:grid;place-items:center;font-family:var(--mono);font-size:.62rem;color:var(--bg);font-weight:500}
+.hright{display:flex;align-items:center;gap:.6rem}
+
+/* User info */
+.user-btn{display:flex;align-items:center;gap:.5rem;background:var(--s1);border:1px solid var(--b2);border-radius:7px;padding:.28rem .7rem;cursor:pointer;font-size:.78rem;transition:all .15s;color:var(--text)}
+.user-btn:hover{border-color:var(--accent)}
+.user-avatar{width:20px;height:20px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-size:.62rem;color:var(--bg);font-weight:600;overflow:hidden}
+.user-avatar img{width:100%;height:100%;border-radius:50%}
+
+.quota-pill{font-family:var(--mono);font-size:.68rem;padding:.18rem .55rem;border-radius:4px}
+.qp-ok{background:rgba(0,212,170,.1);color:var(--accent);border:1px solid rgba(0,212,170,.2)}
+.qp-low{background:rgba(232,184,75,.1);color:var(--gold);border:1px solid rgba(232,184,75,.2)}
+.qp-out{background:rgba(240,92,92,.1);color:var(--red);border:1px solid rgba(240,92,92,.2)}
+
+.ai-badge{font-family:var(--mono);font-size:.65rem;padding:.15rem .5rem;border-radius:4px}
+.ai-gemini{background:rgba(66,133,244,.1);color:#6ba3f8;border:1px solid rgba(66,133,244,.2)}
+.ai-groq{background:rgba(255,102,0,.1);color:#ff9944;border:1px solid rgba(255,102,0,.2)}
+.ai-claude{background:rgba(217,119,6,.1);color:#f0a84b;border:1px solid rgba(217,119,6,.2)}
+.ai-openai{background:rgba(16,163,127,.1);color:#3ecf9e;border:1px solid rgba(16,163,127,.2)}
+.ai-none{background:var(--s1);color:var(--dim);border:1px solid var(--b1)}
+
+/* ── App layout ── */
+.app{display:flex;flex:1;overflow:hidden;position:relative;z-index:1}
+
+/* ── Sidebar ── */
+.sidebar{width:232px;flex-shrink:0;border-right:1px solid var(--b1);display:flex;flex-direction:column;background:rgba(8,12,18,.5)}
+@media(max-width:680px){.sidebar{display:none}}
+
+.sb-top{padding:.9rem;border-bottom:1px solid var(--b1)}
+.new-btn{width:100%;background:var(--accent);color:var(--bg);border:none;padding:.52rem;border-radius:7px;font-family:var(--sans);font-weight:600;font-size:.8rem;cursor:pointer;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:.4rem}
+.new-btn:hover{opacity:.9}
+
+.sb-sec{padding:.65rem .9rem .3rem;font-size:.63rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+.hist{padding:.44rem .9rem;font-size:.78rem;color:var(--muted);cursor:pointer;transition:all .1s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:0}
+.hist:hover{background:var(--s1);color:var(--text)}
+.hist.on{background:var(--s2);color:var(--text)}
+
+.sb-bottom{margin-top:auto;padding:.9rem;border-top:1px solid var(--b1);display:flex;flex-direction:column;gap:.4rem}
+.sb-btn{width:100%;background:none;border:1px solid var(--b1);color:var(--muted);padding:.38rem .7rem;border-radius:6px;font-size:.75rem;cursor:pointer;text-align:left;transition:all .1s;font-family:var(--sans);display:flex;align-items:center;gap:.4rem}
+.sb-btn:hover{border-color:var(--b2);color:var(--text)}
+
+/* ── Chat area ── */
+.chat{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Messages ── */
+.msgs{flex:1;overflow-y:auto;padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:1.1rem}
+.msgs::-webkit-scrollbar{width:4px}
+.msgs::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+
+/* Welcome */
+.welcome{max-width:580px;margin:1.5rem auto;text-align:center;animation:fadeUp .4s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.wlc-eye{font-family:var(--mono);font-size:.68rem;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;justify-content:center;gap:.5rem}
+.wlc-eye::before,.wlc-eye::after{content:'';width:28px;height:1px;background:var(--accent);opacity:.4}
+.welcome h2{font-family:var(--serif);font-size:1.55rem;margin-bottom:.5rem}
+.welcome p{font-size:.85rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.7}
+.sugs{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;text-align:left}
+@media(max-width:500px){.sugs{grid-template-columns:1fr}}
+.sug{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:.7rem .85rem;font-size:.78rem;color:var(--muted);cursor:pointer;transition:all .15s;line-height:1.5}
+.sug:hover{border-color:rgba(0,212,170,.3);color:var(--text)}
+.sug strong{display:block;color:var(--text);margin-bottom:.15rem;font-size:.8rem}
+
+/* Messages */
+.msg{display:flex;gap:.65rem;animation:fadeUp .2s ease both}
+.msg-av{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:.7rem;flex-shrink:0;margin-top:.1rem}
+.av-u{background:var(--b2);color:var(--muted);font-family:var(--mono)}
+.av-ai{background:var(--accent);color:var(--bg);font-family:var(--mono);font-size:.6rem;font-weight:500}
+.msg-body{flex:1;min-width:0}
+.msg-role{font-size:.65rem;font-family:var(--mono);color:var(--dim);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.06em}
+.msg-text{font-size:.87rem;line-height:1.75}
+.msg-text p{margin-bottom:.55rem}
+.msg-text p:last-child{margin-bottom:0}
+.msg-text strong{font-weight:600}
+.msg-text em{color:var(--muted)}
+.msg-text code{font-family:var(--mono);font-size:.78rem;background:var(--s2);padding:.1rem .35rem;border-radius:3px;color:var(--accent)}
+.msg-text h3{font-family:var(--serif);font-size:1rem;margin:1rem 0 .4rem}
+.msg-text h4{font-size:.87rem;font-weight:600;margin:.75rem 0 .35rem}
+.msg-text hr{border:none;border-top:1px solid var(--b1);margin:.65rem 0}
+.msg-text table{border-collapse:collapse;margin:.5rem 0;width:100%;font-size:.78rem}
+.msg-text td,.msg-text th{padding:.3rem .55rem;border:1px solid var(--b1)}
+.msg-text ul{margin:.3rem 0 .3rem 1.2rem}
+.msg-text li{margin-bottom:.18rem;color:var(--muted)}
+.msg-text li span{color:var(--text)}
+
+/* Tool call */
+.tc{background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:.38rem .7rem;margin-bottom:.4rem;display:flex;align-items:center;gap:.45rem;font-size:.72rem;color:var(--muted);animation:fadeUp .15s ease}
+.tc-name{font-family:var(--mono);color:var(--accent)}
+.tc-st{margin-left:auto;font-size:.68rem}
+.tc-run{color:var(--gold)}
+.tc-done{color:var(--green)}
+
+/* Result cards */
+.r-grid{display:flex;flex-direction:column;gap:.45rem;margin:.6rem 0}
+.r-card{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:.8rem 1rem;transition:border-color .15s}
+.r-card:hover{border-color:var(--b2)}
+.r-title{font-family:var(--serif);font-size:.88rem;margin-bottom:.28rem}
+.r-title a{color:var(--text);text-decoration:none}
+.r-title a:hover{color:var(--accent)}
+.r-meta{font-size:.72rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin-bottom:.28rem}
+.r-sep{color:var(--b2)}
+.ev{font-size:.63rem;padding:.1rem .4rem;border-radius:3px;font-weight:600}
+.ev-rct{background:rgba(62,207,142,.12);color:var(--green)}
+.ev-sr{background:rgba(91,143,212,.12);color:var(--blue)}
+.ev-ma{background:rgba(0,212,170,.12);color:var(--accent)}
+.ev-ct{background:rgba(232,184,75,.12);color:var(--gold)}
+.r-abs{font-size:.77rem;color:var(--muted);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.r-acts{margin-top:.45rem;display:flex;gap:.32rem;flex-wrap:wrap}
+.rbtn{font-size:.7rem;padding:.22rem .55rem;border-radius:4px;border:1px solid var(--b2);background:none;color:var(--muted);cursor:pointer;transition:all .12s;text-decoration:none;display:inline-flex;align-items:center;gap:.2rem;font-family:var(--sans)}
+.rbtn:hover{color:var(--text);border-color:var(--text)}
+.rbtn-a{color:var(--accent);border-color:rgba(0,212,170,.22)}
+.rbtn-a:hover{background:rgba(0,212,170,.07)}
+
+/* Typing */
+.typing{display:flex;align-items:center;gap:.25rem;padding:.35rem 0}
+.td{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:bounce .9s infinite}
+.td:nth-child(2){animation-delay:.15s}.td:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+
+/* ── Input ── */
+.input-wrap{padding:.85rem 1.25rem 1rem;border-top:1px solid var(--b1);background:rgba(8,12,18,.8);backdrop-filter:blur(12px);flex-shrink:0}
+.input-box{background:var(--s1);border:1px solid var(--b2);border-radius:var(--r);overflow:hidden;transition:border-color .2s,box-shadow .2s}
+.input-box:focus-within{border-color:rgba(0,212,170,.4);box-shadow:0 0 0 1px rgba(0,212,170,.08)}
+.input-row{display:flex;align-items:flex-end;padding:.35rem .35rem .35rem .9rem;gap:.4rem}
+.inp{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:var(--sans);font-size:.87rem;resize:none;max-height:120px;line-height:1.6;padding:.38rem 0}
+.inp::placeholder{color:var(--dim)}
+.send{width:32px;height:32px;background:var(--accent);border:none;border-radius:6px;display:grid;place-items:center;cursor:pointer;transition:all .12s;flex-shrink:0}
+.send:hover{opacity:.9;transform:scale(1.04)}
+.send:disabled{background:var(--b2);cursor:not-allowed;transform:none;opacity:1}
+.send svg{width:15px;height:15px;fill:var(--bg)}
+.inp-footer{display:flex;gap:.38rem;padding:.42rem .9rem .52rem;border-top:1px solid var(--b1);flex-wrap:wrap;align-items:center}
+.chip{font-size:.65rem;font-family:var(--mono);padding:.13rem .45rem;border-radius:4px;background:var(--s2);color:var(--muted);border:1px solid var(--b1)}
+.chip.on{background:rgba(0,212,170,.07);color:var(--accent);border-color:rgba(0,212,170,.18)}
+.more{font-size:.65rem;color:var(--dim);cursor:pointer;margin-left:auto}
+.more:hover{color:var(--muted)}
+
+/* ── Modals ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);z-index:500;display:none;align-items:center;justify-content:center;padding:1rem}
+.overlay.open{display:flex}
+.modal{background:var(--s1);border:1px solid var(--b2);border-radius:14px;padding:1.65rem;width:100%;max-width:460px;box-shadow:0 24px 64px rgba(0,0,0,.6);animation:fadeUp .2s ease}
+.modal h3{font-family:var(--serif);font-size:1.15rem;margin-bottom:.3rem}
+.modal-sub{font-size:.8rem;color:var(--muted);margin-bottom:1.4rem;line-height:1.65}
+
+/* Google sign-in area */
+.google-area{display:flex;flex-direction:column;align-items:center;gap:.75rem;margin-bottom:1.25rem}
+.google-btn{display:flex;align-items:center;gap:.75rem;background:var(--s2);border:1px solid var(--b2);border-radius:8px;padding:.6rem 1.25rem;cursor:pointer;font-size:.85rem;font-weight:500;color:var(--text);transition:all .15s;width:100%;justify-content:center}
+.google-btn:hover{border-color:rgba(66,133,244,.4);background:rgba(66,133,244,.06)}
+.google-logo{width:18px;height:18px}
+
+.divider{display:flex;align-items:center;gap:.75rem;color:var(--dim);font-size:.75rem;margin-bottom:1.1rem}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--b1)}
+
+/* Provider selector */
+.prov-row{display:flex;gap:.45rem;margin-bottom:1rem}
+.prov{flex:1;border:1px solid var(--b2);border-radius:8px;padding:.6rem .5rem;cursor:pointer;transition:all .12s;text-align:center}
+.prov:hover{border-color:var(--b2)}
+.prov.sel{border-color:var(--accent);background:rgba(0,212,170,.05)}
+.prov-logo{font-size:1.2rem;margin-bottom:.2rem}
+.prov-name{font-size:.74rem;font-weight:500}
+
+.lbl{font-size:.75rem;color:var(--muted);margin-bottom:.35rem;display:block}
+.minp{width:100%;background:var(--bg);border:1px solid var(--b2);color:var(--text);padding:.5rem .8rem;border-radius:7px;font-family:var(--mono);font-size:.8rem;outline:none;margin-bottom:.7rem;transition:border-color .15s}
+.minp:focus{border-color:var(--accent)}
+.minp::placeholder{color:var(--dim)}
+
+.model-row{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:1.1rem}
+.model-opt{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.5rem .65rem;cursor:pointer;transition:all .12s}
+.model-opt:hover{border-color:var(--b2)}
+.model-opt.sel{border-color:var(--accent);background:rgba(0,212,170,.05)}
+.mo-name{font-size:.76rem;font-weight:500}
+.mo-desc{font-size:.65rem;color:var(--muted)}
+
+.note{font-size:.7rem;color:var(--dim);background:var(--bg);border:1px solid var(--b1);border-radius:6px;padding:.45rem .7rem;margin-bottom:1.1rem;line-height:1.6}
+
+.mbtns{display:flex;gap:.45rem;justify-content:flex-end}
+.mbtn{padding:.48rem 1.15rem;border-radius:7px;font-family:var(--sans);font-size:.8rem;font-weight:600;cursor:pointer;transition:all .12s}
+.mbtn-c{background:none;border:1px solid var(--b2);color:var(--muted)}
+.mbtn-c:hover{color:var(--text);border-color:var(--text)}
+.mbtn-s{background:var(--accent);border:none;color:var(--bg)}
+.mbtn-s:hover{opacity:.9}
+
+/* Quota modal */
+.quota-opts{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem}
+.qopt{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:.75rem;cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:.65rem}
+.qopt:hover{border-color:var(--accent)}
+.qopt-icon{font-size:1.2rem}
+.qopt-info{flex:1}
+.qopt-title{font-size:.82rem;font-weight:600;margin-bottom:.15rem}
+.qopt-desc{font-size:.72rem;color:var(--muted)}
+
+/* Alert */
+.alert{position:fixed;top:1rem;right:1rem;z-index:600;background:var(--s1);border:1px solid var(--b2);border-radius:8px;padding:.65rem 1rem;font-size:.8rem;display:flex;align-items:center;gap:.5rem;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:slideIn .2s ease;max-width:320px}
+@keyframes slideIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+.alert-icon{font-size:.9rem}
+</style>
+</head>
+<body>
+
+<!-- Auth Modal -->
+<div class="overlay" id="authModal">
+  <div class="modal">
+    <h3>Welcome to ClinSearch</h3>
+    <p class="modal-sub">Sign in to get 20 free AI queries per day. Or add your own API key for unlimited use.</p>
+
+    <div class="google-area">
+      <!-- Google One Tap / Sign In button -->
+      <div id="g_id_onload"
+        data-client_id="GOOGLE_CLIENT_ID_PLACEHOLDER"
+        data-callback="handleGoogleSignIn"
+        data-auto_prompt="false">
+      </div>
+      <div class="g_id_signin"
+        data-type="standard"
+        data-shape="rectangular"
+        data-theme="filled_black"
+        data-text="signin_with"
+        data-size="large"
+        data-width="360">
+      </div>
+      <div style="font-size:.72rem;color:var(--dim)">or continue without signing in (5 free queries)</div>
+    </div>
+
+    <div class="divider">or add your own API key</div>
+
+    <div class="prov-row">
+      <div class="prov sel" id="prov-claude" onclick="selProv('claude')"><div class="prov-logo">🟠</div><div class="prov-name">Claude</div></div>
+      <div class="prov" id="prov-openai" onclick="selProv('openai')"><div class="prov-logo">🟢</div><div class="prov-name">ChatGPT</div></div>
+    </div>
+
+    <label class="lbl">API Key — used directly in your browser</label>
+    <input class="minp" id="userKey" type="password" placeholder="sk-ant-..."/>
+
+    <div id="modelSel" class="model-row">
+      <div class="model-opt sel" id="m0" onclick="selModel(0)"><div class="mo-name">claude-sonnet-4</div><div class="mo-desc">Recommended</div></div>
+      <div class="model-opt" id="m1" onclick="selModel(1)"><div class="mo-name">claude-opus-4</div><div class="mo-desc">Most capable</div></div>
+    </div>
+
+    <div class="note">🔒 API keys stay in your browser only — never sent to ClinSearch servers.</div>
+
+    <div class="mbtns">
+      <button class="mbtn mbtn-c" onclick="startDemo()">Try demo</button>
+      <button class="mbtn mbtn-s" onclick="saveAuth()">Start →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Quota exceeded modal -->
+<div class="overlay" id="quotaModal">
+  <div class="modal">
+    <h3>Daily limit reached</h3>
+    <p class="modal-sub">You've used your 20 free queries today. Choose an option:</p>
+    <div class="quota-opts">
+      <div class="qopt" onclick="openAuthForKey()"><div class="qopt-icon">🔑</div><div class="qopt-info"><div class="qopt-title">Add your API key</div><div class="qopt-desc">Claude or OpenAI — unlimited queries, you pay per use</div></div></div>
+      <div class="qopt" onclick="closeQuota()"><div class="qopt-icon">🕐</div><div class="qopt-info"><div class="qopt-title">Come back tomorrow</div><div class="qopt-desc">Quota resets daily at midnight UTC</div></div></div>
+    </div>
+    <button class="mbtn mbtn-c" style="width:100%" onclick="closeQuota()">Close</button>
+  </div>
+</div>
+
+<header>
+  <div class="logo"><div class="logo-mark">CS</div>ClinSearch</div>
+  <div class="hright">
+    <span class="ai-badge" id="aiBadge">Loading…</span>
+    <span class="quota-pill qp-ok" id="quotaPill">… / 20</span>
+    <div class="user-btn" id="userBtn" onclick="toggleUserMenu()">
+      <div class="user-avatar" id="userAvatar">?</div>
+      <span id="userName">Sign in</span>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+  <div class="sidebar">
+    <div class="sb-top"><button class="new-btn" onclick="newChat()">＋ New chat</button></div>
+    <div class="sb-sec">Recent</div>
+    <div class="hist on">Dupilumab AD systematic review</div>
+    <div class="hist">BCC hedgehog inhibitors</div>
+    <div class="hist">Hidradenitis biologics 2024</div>
+    <div class="hist">Melanoma immunotherapy</div>
+    <div class="hist">FFA trichology outcomes</div>
+    <div class="sb-bottom">
+      <button class="sb-btn" onclick="openSettings()">⚙️ API Settings</button>
+      <button class="sb-btn" onclick="openAuthModal()">🔑 Sign in / API key</button>
+    </div>
+  </div>
+
+  <div class="chat">
+    <div class="msgs" id="msgs">
+      <div class="welcome" id="welcome">
+        <div class="wlc-eye">Evidence-based medicine</div>
+        <h2>Ask anything clinical</h2>
+        <p>ClinSearch searches PubMed, Semantic Scholar, OpenAlex, ClinicalTrials.gov and more — then synthesises the evidence using AI.</p>
+        <div class="sugs">
+          <div class="sug" onclick="useSug(this)"><strong>Evidence review</strong>Best biologics for moderate-to-severe atopic dermatitis — RCT evidence</div>
+          <div class="sug" onclick="useSug(this)"><strong>Comparison</strong>Dupilumab vs tralokinumab efficacy and safety head-to-head</div>
+          <div class="sug" onclick="useSug(this)"><strong>Research gaps</strong>What are unresolved questions in hidradenitis suppurativa treatment?</div>
+          <div class="sug" onclick="useSug(this)"><strong>Trials</strong>Phase 3 trials recruiting now for basal cell carcinoma</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-wrap">
+      <div class="input-box">
+        <div class="input-row">
+          <textarea class="inp" id="inp" rows="1" placeholder="Ask a clinical question…" onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+          <button class="send" id="sendBtn" onclick="send()">
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+          </button>
+        </div>
+        <div class="inp-footer">
+          <span class="chip on">PubMed</span>
+          <span class="chip on">S. Scholar</span>
+          <span class="chip on">OpenAlex</span>
+          <span class="chip on">ClinTrials</span>
+          <span class="chip">PICO</span>
+          <span class="chip">GRADE</span>
+          <span class="more" onclick="openSettings()">+38 tools →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ───────────────────────────────────────────────────────────────────
+const API = 'https://clinsearch-api.onrender.com'; // Replace with your backend URL
+
+// ── State ────────────────────────────────────────────────────────────────────
+let state = {
+  session: null,       // JWT from Google login
+  user: null,          // {name, email, picture}
+  userKey: '',         // User's own API key
+  userProvider: '',    // 'claude' | 'openai'
+  userModel: '',
+  history: [],
+  quota: {used:0, limit:20},
+  aiProvider: '',      // Current active AI
+  isDemo: false,
+};
+
+// Load saved state
+const saved = localStorage.getItem('cs_state');
+if (saved) {
+  try {
+    const s = JSON.parse(saved);
+    state.session     = s.session;
+    state.user        = s.user;
+    state.userKey     = s.userKey || '';
+    state.userProvider= s.userProvider || '';
+    state.userModel   = s.userModel || '';
+  } catch(e) {}
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+window.addEventListener('load', async () => {
+  // Check for auth callback
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('token')) {
+    state.session = params.get('token');
+    state.user = { name: params.get('name'), email: params.get('email') };
+    saveState();
+    window.history.replaceState({}, '', '/');
+  }
+
+  // Update UI
+  updateUserUI();
+  await fetchQuota();
+  await fetchAIStatus();
+
+  // Show auth modal if no session and no key
+  if (!state.session && !state.userKey) {
+    setTimeout(() => openAuthModal(), 600);
+  }
+});
+
+function saveState() {
+  localStorage.setItem('cs_state', JSON.stringify({
+    session: state.session,
+    user: state.user,
+    userKey: state.userKey,
+    userProvider: state.userProvider,
+    userModel: state.userModel,
+  }));
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+function openAuthModal() { document.getElementById('authModal').classList.add('open'); }
+function closeAuthModal() { document.getElementById('authModal').classList.remove('open'); }
+function openSettings() { openAuthModal(); }
+
+async function handleGoogleSignIn(response) {
+  try {
+    const r = await fetch(`${API}/auth/verify`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({credential: response.credential})
+    });
+    const data = await r.json();
+    state.session = data.token;
+    state.user    = data.user;
+    saveState();
+    closeAuthModal();
+    updateUserUI();
+    await fetchQuota();
+    showAlert('✅ Signed in as ' + data.user.name);
+  } catch(e) {
+    showAlert('❌ Sign-in failed: ' + e.message);
+  }
+}
+
+let selProvId = 'claude';
+let selModelIdx = 0;
+const MODELS = {
+  claude: ['claude-sonnet-4-20250514','claude-opus-4-5'],
+  openai: ['gpt-4o','gpt-4-turbo'],
+};
+
+function selProv(p) {
+  selProvId = p;
+  document.querySelectorAll('.prov').forEach(el => el.classList.remove('sel'));
+  document.getElementById('prov-'+p).classList.add('sel');
+  document.getElementById('userKey').placeholder = p==='claude'?'sk-ant-...':'sk-...';
+  const models = MODELS[p];
+  document.getElementById('modelSel').innerHTML = models.map((m,i)=>`
+    <div class="model-opt ${i===0?'sel':''}" id="m${i}" onclick="selModel(${i})">
+      <div class="mo-name">${m.split('-').slice(1,3).join(' ')}</div>
+      <div class="mo-desc">${i===0?'Recommended':'Most capable'}</div>
+    </div>`).join('');
+  selModelIdx = 0;
+}
+
+function selModel(i) {
+  selModelIdx = i;
+  document.querySelectorAll('.model-opt').forEach(el => el.classList.remove('sel'));
+  document.getElementById('m'+i)?.classList.add('sel');
+}
+
+function saveAuth() {
+  const key = document.getElementById('userKey').value.trim();
+  if (key) {
+    state.userKey      = key;
+    state.userProvider = selProvId;
+    state.userModel    = MODELS[selProvId][selModelIdx];
+    saveState();
+    closeAuthModal();
+    updateAIBadge();
+    showAlert(`✅ ${selProvId === 'claude' ? 'Claude' : 'OpenAI'} key saved`);
+  } else {
+    closeAuthModal();
+  }
+}
+
+function startDemo() {
+  state.isDemo = true;
+  closeAuthModal();
+  updateAIBadge();
+}
+
+// ── User UI ──────────────────────────────────────────────────────────────────
+function updateUserUI() {
+  const btn    = document.getElementById('userBtn');
+  const avatar = document.getElementById('userAvatar');
+  const name   = document.getElementById('userName');
+
+  if (state.user) {
+    name.textContent = state.user.name?.split(' ')[0] || 'User';
+    if (state.user.picture) {
+      avatar.innerHTML = `<img src="${state.user.picture}" alt=""/>`;
+    } else {
+      avatar.textContent = (state.user.name || 'U')[0].toUpperCase();
+    }
+  } else {
+    name.textContent = 'Sign in';
+    avatar.textContent = '?';
+  }
+}
+
+async function fetchQuota() {
+  try {
+    const r = await fetch(`${API}/api/quota?token=${state.session || ''}`);
+    const data = await r.json();
+    state.quota = data;
+    updateQuotaUI();
+  } catch(e) {}
+}
+
+function updateQuotaUI() {
+  const pill = document.getElementById('quotaPill');
+  const { used, limit } = state.quota;
+  const rem = limit - used;
+  pill.textContent = `${used} / ${limit}`;
+  pill.className = 'quota-pill ' + (rem > 5 ? 'qp-ok' : rem > 0 ? 'qp-low' : 'qp-out');
+}
+
+async function fetchAIStatus() {
+  try {
+    const r = await fetch(`${API}/health`);
+    const data = await r.json();
+    state.serverAI = data.ai;
+    updateAIBadge();
+  } catch(e) {
+    updateAIBadge();
+  }
+}
+
+function updateAIBadge() {
+  const badge = document.getElementById('aiBadge');
+  if (state.userKey && state.userProvider) {
+    badge.className = `ai-badge ai-${state.userProvider}`;
+    badge.textContent = state.userProvider === 'claude' ? '🟠 Claude' : '🟢 GPT-4o';
+  } else if (state.serverAI?.gemini) {
+    badge.className = 'ai-badge ai-gemini';
+    badge.textContent = '🔵 Gemini Free';
+  } else if (state.serverAI?.groq) {
+    badge.className = 'ai-badge ai-groq';
+    badge.textContent = '🟡 Groq Free';
+  } else {
+    badge.className = 'ai-badge ai-none';
+    badge.textContent = 'Demo';
+  }
+}
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+function useSug(el) {
+  document.getElementById('inp').value = el.querySelector('strong').nextSibling.textContent.trim();
+  send();
+}
+
+function onKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+}
+
+function resize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function newChat() {
+  state.history = [];
+  document.getElementById('msgs').innerHTML = '';
+  const w = document.createElement('div');
+  w.id = 'welcome'; w.className = 'welcome';
+  w.innerHTML = `<div class="wlc-eye">Evidence-based medicine</div><h2>Ask anything clinical</h2><p>PubMed · Semantic Scholar · OpenAlex · ClinicalTrials.gov and more.</p>`;
+  document.getElementById('msgs').appendChild(w);
+}
+
+async function send() {
+  const inp = document.getElementById('inp');
+  const text = inp.value.trim();
+  if (!text) return;
+
+  document.getElementById('welcome')?.remove();
+  inp.value = ''; inp.style.height = 'auto';
+  document.getElementById('sendBtn').disabled = true;
+
+  addMsg('user', text);
+  state.history.push({role:'user', content:text});
+
+  if (state.isDemo || (!state.session && !state.userKey && !state.serverAI?.gemini && !state.serverAI?.groq)) {
+    await demoReply(text);
+  } else {
+    await aiReply(text);
+  }
+
+  document.getElementById('sendBtn').disabled = false;
+  scrollBot();
+}
+
+function addMsg(role, content, html=false) {
+  const msgs = document.getElementById('msgs');
+  const d = document.createElement('div');
+  d.className = 'msg';
+  d.innerHTML = `
+    <div class="msg-av ${role==='user'?'av-u':'av-ai'}">${role==='user'?'U':'CS'}</div>
+    <div class="msg-body">
+      <div class="msg-role">${role==='user'?'You':'ClinSearch AI'}</div>
+      <div class="msg-text" id="mt${Date.now()}">${html?content:esc(content)}</div>
+    </div>`;
+  msgs.appendChild(d); scrollBot();
+  return d.querySelector('.msg-text');
+}
+
+function addTC(name) {
+  const msgs = document.getElementById('msgs');
+  const id = 'tc'+Date.now();
+  const d = document.createElement('div');
+  d.id = id; d.className = 'msg'; d.style.opacity='.75';
+  d.innerHTML = `<div class="msg-av av-ai" style="background:var(--s2);color:var(--accent);font-size:.75rem">⚡</div><div class="msg-body"><div class="tc"><span>Calling <span class="tc-name">${name}</span></span><span class="tc-st tc-run" id="${id}s">⟳</span></div></div>`;
+  msgs.appendChild(d); scrollBot();
+  return id;
+}
+
+function doneTC(id) {
+  const el = document.getElementById(id+'s');
+  if (el) { el.className='tc-st tc-done'; el.textContent='✓'; }
+}
+
+function scrollBot() {
+  const msgs = document.getElementById('msgs');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Real AI reply ─────────────────────────────────────────────────────────────
+async function aiReply(text) {
+  // Show typing
+  const msgs = document.getElementById('msgs');
+  const td = document.createElement('div');
+  td.id='typing'; td.className='msg';
+  td.innerHTML=`<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div></div>`;
+  msgs.appendChild(td); scrollBot();
+
+  const SYSTEM = `You are ClinSearch AI, a scientific literature assistant for medical professionals.
+You have access to research databases and will search them when needed.
+Always search for evidence before answering clinical questions.
+Format responses with: evidence levels (RCT/SR/MA), citation counts, links, and a clinical bottom line.
+Respond in the same language as the user. Use markdown formatting.`;
+
+  const messages = [
+    {role:'system', content:SYSTEM},
+    ...state.history,
+  ];
+
+  try {
+    let response = '';
+
+    // If user has their own key → call AI directly from browser (key never leaves browser)
+    if (state.userKey && state.userProvider) {
+      document.getElementById('typing')?.remove();
+      const tc = addTC(state.userProvider === 'claude' ? 'claude API (your key)' : 'openai API (your key)');
+      try {
+        if (state.userProvider === 'claude') {
+          response = await callClaudeDirect(messages, state.userKey, state.userModel);
+        } else {
+          response = await callOpenAIDirect(messages, state.userKey, state.userModel);
+        }
+        doneTC(tc);
+        state.aiProvider = state.userProvider;
+      } catch(e) {
+        doneTC(tc);
+        throw e;
+      }
+
+    } else {
+      // Use server free tier (Gemini/Groq) — no key exposed
+      const body = {
+        messages,
+        session_token: state.session || '',
+      };
+
+      const r = await fetch(`${API}/api/chat`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+
+      document.getElementById('typing')?.remove();
+
+      if (r.status === 429) {
+        const data = await r.json();
+        if (data.error === 'daily_limit') {
+          document.getElementById('quotaModal').classList.add('open');
+          return;
+        }
+      }
+
+      if (!r.ok) throw new Error(await r.text());
+
+      const data = await r.json();
+      response = data.response;
+      state.aiProvider = data.provider;
+      await fetchQuota();
+    }
+
+    updateAIBadge();
+    const el = addMsg('ai','',true);
+    el.innerHTML = mdToHtml(response);
+    state.history.push({role:'assistant', content:response});
+
+  } catch(e) {
+    document.getElementById('typing')?.remove();
+    addMsg('ai', `⚠️ Error: ${e.message}`);
+  }
+}
+
+// ── Demo reply ────────────────────────────────────────────────────────────────
+async function demoReply(text) {
+  await delay(400);
+  const t1 = addTC('research_all_sources("'+text.slice(0,35)+'...")');
+  await delay(700); doneTC(t1);
+  const t2 = addTC('rank_evidence([pmid1, pmid2, pmid3])');
+  await delay(500); doneTC(t2);
+  const t3 = addTC('check_retraction([doi1, doi2])');
+  await delay(400); doneTC(t3);
+  await delay(200);
+
+  const html = `<p><strong>Demo mode</strong> — connect your API key or sign in for real results.</p>
+<h3>Top Evidence Found</h3>
+<div class="r-grid">
+<div class="r-card"><div class="r-title"><a href="https://pubmed.ncbi.nlm.nih.gov/29745992/" target="_blank">Dupilumab in Adults with Moderate-to-Severe Atopic Dermatitis (SOLO 1 & 2)</a></div><div class="r-meta"><span>Simpson E et al.</span><span class="r-sep">·</span><em>N Engl J Med</em><span class="r-sep">·</span><span>2022</span><span class="r-sep">·</span><span class="ev ev-rct">RCT</span></div><div class="r-abs">IGA 0/1: 37–38% vs 8–10% (p&lt;0.001). EASI-75: 51–52% vs 15–16%. Two phase 3 trials, n=1,379.</div><div class="r-acts"><a class="rbtn" href="https://pubmed.ncbi.nlm.nih.gov/29745992/" target="_blank">PubMed →</a><span style="margin-left:auto;font-family:var(--mono);font-size:.65rem;color:var(--dim)">⭐ 1,847</span></div></div>
+<div class="r-card"><div class="r-title"><a href="#" target="_blank">Biologics for Atopic Dermatitis: Network Meta-Analysis of 50 RCTs</a></div><div class="r-meta"><span>Drucker AM et al.</span><span class="r-sep">·</span><em>JAMA Dermatology</em><span class="r-sep">·</span><span>2022</span><span class="r-sep">·</span><span class="ev ev-ma">Meta-Analysis</span></div><div class="r-abs">Dupilumab: EASI-75 RR 5.2 (95%CI 4.1–6.6) vs placebo. Superior to all other biologics at 16 weeks.</div><div class="r-acts"><a class="rbtn rbtn-a" href="#" target="_blank">📄 Free PDF</a><span style="margin-left:auto;font-family:var(--mono);font-size:.65rem;color:var(--dim)">⭐ 423</span></div></div>
+</div>
+<h3>GRADE Assessment</h3>
+<p>IGA 0/1 at 16 weeks: <strong>⊕⊕⊕⊕ HIGH certainty</strong> (6 RCTs, n=2,840, consistent results, minimal risk of bias)</p>
+<hr>
+<p><strong>Clinical bottom line:</strong> Dupilumab has the strongest evidence base for moderate-to-severe AD. Tralokinumab and lebrikizumab are effective alternatives. ✅ No retractions detected.</p>`;
+
+  const el = addMsg('ai','',true);
+  el.innerHTML = html;
+  state.history.push({role:'assistant', content:'[Demo response]'});
+}
+
+// ── Quota modal ───────────────────────────────────────────────────────────────
+function closeQuota() { document.getElementById('quotaModal').classList.remove('open'); }
+function openAuthForKey() { closeQuota(); openAuthModal(); }
+
+// ── Direct browser AI calls (key never leaves browser) ──────────────────────
+async function callClaudeDirect(messages, key, model) {
+  const system = messages.find(m=>m.role==='system')?.content || '';
+  const history = messages.filter(m=>m.role!=='system');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: model || 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      system,
+      messages: history,
+    })
+  });
+  if (!r.ok) {
+    const err = await r.json();
+    throw new Error(err.error?.message || `Claude API error ${r.status}`);
+  }
+  const data = await r.json();
+  return data.content?.[0]?.text || '';
+}
+
+async function callOpenAIDirect(messages, key, model) {
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + key,
+    },
+    body: JSON.stringify({
+      model: model || 'gpt-4o',
+      max_tokens: 2048,
+      messages,
+    })
+  });
+  if (!r.ok) {
+    const err = await r.json();
+    throw new Error(err.error?.message || `OpenAI API error ${r.status}`);
+  }
+  const data = await r.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+// ── Markdown ──────────────────────────────────────────────────────────────────
+function mdToHtml(text) {
+  return text
+    .replace(/^## (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^### (.+)$/gm,'<h4>$1</h4>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`(.+?)`/g,'<code>$1</code>')
+    .replace(/^---$/gm,'<hr>')
+    .replace(/^\| (.+) \|$/gm, (m,row)=>{ if(row.match(/^[-\s|]+$/)) return ''; const cells=row.split('|').map(c=>c.trim()); return `<tr>${cells.map(c=>`<td>${c}</td>`).join('')}</tr>`; })
+    .replace(/((?:<tr>.*<\/tr>\n?)+)/g,'<table>$1</table>')
+    .replace(/^- (.+)$/gm,'<li><span>$1</span></li>')
+    .replace(/((?:<li>.*<\/li>\n?)+)/g,'<ul>$1</ul>')
+    .replace(/\n\n/g,'</p><p>').replace(/^(?!<[h3h4litrulhr]|<\/[h3h4]|<table|<\/table)(.+)$/gm,'<p>$1</p>');
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function delay(ms) { return new Promise(r=>setTimeout(r,ms)); }
+
+function showAlert(msg) {
+  const a = document.createElement('div');
+  a.className = 'alert';
+  a.innerHTML = `<span class="alert-icon">${msg.startsWith('✅')?'✅':'❌'}</span><span>${msg.replace(/^[✅❌] /,'')}</span>`;
+  document.body.appendChild(a);
+  setTimeout(()=>a.remove(), 3500);
+}
+
+function toggleUserMenu() { openAuthModal(); }
+</script>
+</body>
+</html>
