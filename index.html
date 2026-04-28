@@ -2,221 +2,342 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>ClinSearch — Medical Literature AI</title>
+<title>ClinSearch — Medical Research AI</title>
+<meta name="description" content="Free AI-powered medical literature search. Search PubMed, Semantic Scholar, OpenAlex and 10+ databases simultaneously."/>
+<meta property="og:title" content="ClinSearch — Medical Research AI"/>
+<meta property="og:description" content="Free AI-powered medical literature search for clinicians and investigators. 200M+ papers, GRADE assessment, PICO extraction."/>
+<meta property="og:type" content="website"/>
+<meta property="og:image" content="https://clinsearch.vercel.app/og.png"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="ClinSearch — Medical Research AI"/>
+<meta name="twitter:description" content="Free AI-powered medical literature search. 200M+ papers across PubMed, Semantic Scholar, OpenAlex."/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>"/>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 :root{
-  --bg:#080c12;--s1:#0f1621;--s2:#151f2e;--b1:#1a2638;--b2:#243347;
+  --bg:#080c12;--s1:#0f1621;--s2:#151f2e;--s3:#1a2536;
+  --b1:#1a2638;--b2:#243347;--b3:#2e4060;
   --text:#dce8f4;--muted:#6a8099;--dim:#3a5068;
-  --accent:#00d4aa;--a2:#0096d4;--gold:#e8b84b;--red:#f05c5c;
-  --green:#3ecf8e;--blue:#5b8fd4;--purple:#9b8fd4;
+  --accent:#00d4aa;--a2:#0096d4;--gold:#e8b84b;
+  --red:#f05c5c;--green:#3ecf8e;--blue:#5b8fd4;--purple:#9b8fd4;
   --serif:'Libre Baskerville',Georgia,serif;
   --sans:'DM Sans',system-ui,sans-serif;
   --mono:'DM Mono',monospace;
   --r:10px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%}
-body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column;overflow:hidden}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
 body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,170,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,170,.02) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
 
 /* ── Header ── */
-header{display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;height:52px;border-bottom:1px solid var(--b1);background:rgba(8,12,18,.92);backdrop-filter:blur(16px);flex-shrink:0;position:relative;z-index:100}
+header{display:flex;align-items:center;justify-content:space-between;padding:0 1.25rem;height:52px;border-bottom:1px solid var(--b1);background:rgba(8,12,18,.94);backdrop-filter:blur(16px);flex-shrink:0;z-index:100;position:relative}
 .logo{display:flex;align-items:center;gap:.55rem;font-family:var(--serif);font-size:1.1rem;color:var(--text)}
 .logo-mark{width:22px;height:22px;background:var(--accent);border-radius:5px;display:grid;place-items:center;font-family:var(--mono);font-size:.62rem;color:var(--bg);font-weight:500}
-.hright{display:flex;align-items:center;gap:.6rem}
-
-/* User info */
-.user-btn{display:flex;align-items:center;gap:.5rem;background:var(--s1);border:1px solid var(--b2);border-radius:7px;padding:.28rem .7rem;cursor:pointer;font-size:.78rem;transition:all .15s;color:var(--text)}
+.hright{display:flex;align-items:center;gap:.55rem}
+.hbadge{font-family:var(--mono);font-size:.65rem;padding:.16rem .52rem;border-radius:4px}
+.hb-ai-gemini{background:rgba(66,133,244,.1);color:#6ba3f8;border:1px solid rgba(66,133,244,.2)}
+.hb-ai-groq{background:rgba(255,140,0,.1);color:#ffaa44;border:1px solid rgba(255,140,0,.2)}
+.hb-ai-claude{background:rgba(217,119,6,.1);color:#f0a84b;border:1px solid rgba(217,119,6,.2)}
+.hb-ai-openai{background:rgba(16,163,127,.1);color:#3ecf9e;border:1px solid rgba(16,163,127,.2)}
+.hb-ai-none{background:var(--s1);color:var(--dim);border:1px solid var(--b1)}
+.quota-pill{font-family:var(--mono);font-size:.65rem;padding:.16rem .52rem;border-radius:4px;border:1px solid}
+.qp-ok{background:rgba(0,212,170,.08);color:var(--accent);border-color:rgba(0,212,170,.2)}
+.qp-low{background:rgba(232,184,75,.08);color:var(--gold);border-color:rgba(232,184,75,.2)}
+.qp-out{background:rgba(240,92,92,.08);color:var(--red);border-color:rgba(240,92,92,.2)}
+.user-btn{display:flex;align-items:center;gap:.45rem;background:var(--s1);border:1px solid var(--b2);border-radius:7px;padding:.26rem .65rem;cursor:pointer;font-size:.77rem;transition:all .12s;color:var(--text)}
 .user-btn:hover{border-color:var(--accent)}
-.user-avatar{width:20px;height:20px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-size:.62rem;color:var(--bg);font-weight:600;overflow:hidden}
-.user-avatar img{width:100%;height:100%;border-radius:50%}
+.av{width:19px;height:19px;border-radius:50%;background:var(--accent);display:grid;place-items:center;font-size:.6rem;color:var(--bg);font-weight:600;overflow:hidden;flex-shrink:0}
+.av img{width:100%;height:100%;border-radius:50%}
 
-.quota-pill{font-family:var(--mono);font-size:.68rem;padding:.18rem .55rem;border-radius:4px}
-.qp-ok{background:rgba(0,212,170,.1);color:var(--accent);border:1px solid rgba(0,212,170,.2)}
-.qp-low{background:rgba(232,184,75,.1);color:var(--gold);border:1px solid rgba(232,184,75,.2)}
-.qp-out{background:rgba(240,92,92,.1);color:var(--red);border:1px solid rgba(240,92,92,.2)}
-
-.ai-badge{font-family:var(--mono);font-size:.65rem;padding:.15rem .5rem;border-radius:4px}
-.ai-gemini{background:rgba(66,133,244,.1);color:#6ba3f8;border:1px solid rgba(66,133,244,.2)}
-.ai-groq{background:rgba(255,102,0,.1);color:#ff9944;border:1px solid rgba(255,102,0,.2)}
-.ai-claude{background:rgba(217,119,6,.1);color:#f0a84b;border:1px solid rgba(217,119,6,.2)}
-.ai-openai{background:rgba(16,163,127,.1);color:#3ecf9e;border:1px solid rgba(16,163,127,.2)}
-.ai-none{background:var(--s1);color:var(--dim);border:1px solid var(--b1)}
-
-/* ── App layout ── */
+/* ── Layout ── */
 .app{display:flex;flex:1;overflow:hidden;position:relative;z-index:1}
 
-/* ── Sidebar ── */
-.sidebar{width:232px;flex-shrink:0;border-right:1px solid var(--b1);display:flex;flex-direction:column;background:rgba(8,12,18,.5)}
-@media(max-width:680px){.sidebar{display:none}}
-
-.sb-top{padding:.9rem;border-bottom:1px solid var(--b1)}
-.new-btn{width:100%;background:var(--accent);color:var(--bg);border:none;padding:.52rem;border-radius:7px;font-family:var(--sans);font-weight:600;font-size:.8rem;cursor:pointer;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:.4rem}
+/* ── Left sidebar ── */
+.lsb{width:228px;flex-shrink:0;border-right:1px solid var(--b1);display:flex;flex-direction:column;background:rgba(8,12,18,.5);overflow-y:auto}
+@media(max-width:780px){.lsb{display:none}}
+.lsb-top{padding:.85rem;border-bottom:1px solid var(--b1)}
+.new-btn{width:100%;background:var(--accent);color:var(--bg);border:none;padding:.5rem;border-radius:7px;font-family:var(--sans);font-weight:600;font-size:.79rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.35rem;transition:opacity .12s}
 .new-btn:hover{opacity:.9}
-
-.sb-sec{padding:.65rem .9rem .3rem;font-size:.63rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
-.hist{padding:.44rem .9rem;font-size:.78rem;color:var(--muted);cursor:pointer;transition:all .1s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:0}
+.sec-lbl{padding:.6rem .85rem .25rem;font-size:.62rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+.hist{padding:.42rem .85rem;font-size:.77rem;color:var(--muted);cursor:pointer;transition:all .1s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hist:hover{background:var(--s1);color:var(--text)}
 .hist.on{background:var(--s2);color:var(--text)}
+.lsb-bot{margin-top:auto;padding:.85rem;border-top:1px solid var(--b1);display:flex;flex-direction:column;gap:.35rem}
+.lsb-btn{background:none;border:1px solid var(--b1);color:var(--muted);padding:.36rem .7rem;border-radius:6px;font-size:.74rem;cursor:pointer;text-align:left;transition:all .1s;font-family:var(--sans);display:flex;align-items:center;gap:.35rem}
+.lsb-btn:hover{border-color:var(--b2);color:var(--text)}
 
-.sb-bottom{margin-top:auto;padding:.9rem;border-top:1px solid var(--b1);display:flex;flex-direction:column;gap:.4rem}
-.sb-btn{width:100%;background:none;border:1px solid var(--b1);color:var(--muted);padding:.38rem .7rem;border-radius:6px;font-size:.75rem;cursor:pointer;text-align:left;transition:all .1s;font-family:var(--sans);display:flex;align-items:center;gap:.4rem}
-.sb-btn:hover{border-color:var(--b2);color:var(--text)}
+/* ── Chat ── */
+.chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
 
-/* ── Chat area ── */
-.chat{flex:1;display:flex;flex-direction:column;overflow:hidden}
+/* ── Mode tabs ── */
+.mode-bar{display:flex;gap:0;padding:0 1.25rem;border-bottom:1px solid var(--b1);background:rgba(8,12,18,.7);flex-shrink:0;overflow-x:auto}
+.mode-tab{padding:.52rem .9rem;font-size:.78rem;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .12s;display:flex;align-items:center;gap:.3rem}
+.mode-tab:hover{color:var(--text)}
+.mode-tab.on{color:var(--accent);border-bottom-color:var(--accent)}
 
 /* ── Messages ── */
-.msgs{flex:1;overflow-y:auto;padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:1.1rem}
+.msgs{flex:1;overflow-y:auto;padding:1.25rem 1.5rem;display:flex;flex-direction:column;gap:1rem}
 .msgs::-webkit-scrollbar{width:4px}
 .msgs::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
 
 /* Welcome */
-.welcome{max-width:580px;margin:1.5rem auto;text-align:center;animation:fadeUp .4s ease both}
+.welcome{max-width:600px;margin:1.5rem auto 0;text-align:center;animation:fadeUp .4s ease}
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.wlc-eye{font-family:var(--mono);font-size:.68rem;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;justify-content:center;gap:.5rem}
-.wlc-eye::before,.wlc-eye::after{content:'';width:28px;height:1px;background:var(--accent);opacity:.4}
-.welcome h2{font-family:var(--serif);font-size:1.55rem;margin-bottom:.5rem}
-.welcome p{font-size:.85rem;color:var(--muted);margin-bottom:1.25rem;line-height:1.7}
-.sugs{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;text-align:left}
-@media(max-width:500px){.sugs{grid-template-columns:1fr}}
-.sug{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:.7rem .85rem;font-size:.78rem;color:var(--muted);cursor:pointer;transition:all .15s;line-height:1.5}
-.sug:hover{border-color:rgba(0,212,170,.3);color:var(--text)}
-.sug strong{display:block;color:var(--text);margin-bottom:.15rem;font-size:.8rem}
+.wlc-eye{font-family:var(--mono);font-size:.66rem;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;display:flex;align-items:center;justify-content:center;gap:.45rem}
+.wlc-eye::before,.wlc-eye::after{content:'';width:24px;height:1px;background:var(--accent);opacity:.4}
+.welcome h2{font-family:var(--serif);font-size:1.5rem;margin-bottom:.45rem}
+.welcome p{font-size:.83rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.7;max-width:440px;margin-left:auto;margin-right:auto}
 
-/* Messages */
-.msg{display:flex;gap:.65rem;animation:fadeUp .2s ease both}
-.msg-av{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:.7rem;flex-shrink:0;margin-top:.1rem}
+/* Wizard */
+.wizard{background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;max-width:600px;margin-left:auto;margin-right:auto}
+.wiz-title{font-size:.75rem;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.85rem}
+.wiz-grid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem}
+@media(max-width:500px){.wiz-grid{grid-template-columns:1fr}}
+.wiz-opt{background:var(--bg);border:1px solid var(--b1);border-radius:8px;padding:.7rem .85rem;cursor:pointer;transition:all .12s;text-align:left}
+.wiz-opt:hover{border-color:rgba(0,212,170,.3)}
+.wiz-opt.sel{border-color:var(--accent);background:rgba(0,212,170,.05)}
+.wo-icon{font-size:1.1rem;margin-bottom:.3rem}
+.wo-title{font-size:.8rem;font-weight:600;margin-bottom:.15rem}
+.wo-desc{font-size:.7rem;color:var(--muted);line-height:1.4}
+
+/* Message */
+.msg{display:flex;gap:.6rem;animation:fadeUp .2s ease}
+.msg-av{width:25px;height:25px;border-radius:7px;display:grid;place-items:center;font-size:.68rem;flex-shrink:0;margin-top:.1rem}
 .av-u{background:var(--b2);color:var(--muted);font-family:var(--mono)}
-.av-ai{background:var(--accent);color:var(--bg);font-family:var(--mono);font-size:.6rem;font-weight:500}
+.av-ai{background:var(--accent);color:var(--bg);font-family:var(--mono);font-size:.58rem;font-weight:500}
 .msg-body{flex:1;min-width:0}
-.msg-role{font-size:.65rem;font-family:var(--mono);color:var(--dim);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.06em}
-.msg-text{font-size:.87rem;line-height:1.75}
-.msg-text p{margin-bottom:.55rem}
+.msg-role{font-size:.63rem;font-family:var(--mono);color:var(--dim);margin-bottom:.28rem;text-transform:uppercase;letter-spacing:.06em}
+.msg-text{font-size:.86rem;line-height:1.75}
+.msg-text p{margin-bottom:.5rem}
 .msg-text p:last-child{margin-bottom:0}
 .msg-text strong{font-weight:600}
-.msg-text em{color:var(--muted)}
-.msg-text code{font-family:var(--mono);font-size:.78rem;background:var(--s2);padding:.1rem .35rem;border-radius:3px;color:var(--accent)}
 .msg-text h3{font-family:var(--serif);font-size:1rem;margin:1rem 0 .4rem}
-.msg-text h4{font-size:.87rem;font-weight:600;margin:.75rem 0 .35rem}
-.msg-text hr{border:none;border-top:1px solid var(--b1);margin:.65rem 0}
-.msg-text table{border-collapse:collapse;margin:.5rem 0;width:100%;font-size:.78rem}
-.msg-text td,.msg-text th{padding:.3rem .55rem;border:1px solid var(--b1)}
-.msg-text ul{margin:.3rem 0 .3rem 1.2rem}
-.msg-text li{margin-bottom:.18rem;color:var(--muted)}
-.msg-text li span{color:var(--text)}
+.msg-text h4{font-size:.86rem;font-weight:600;margin:.7rem 0 .32rem}
+.msg-text hr{border:none;border-top:1px solid var(--b1);margin:.6rem 0}
+.msg-text code{font-family:var(--mono);font-size:.77rem;background:var(--s2);padding:.09rem .32rem;border-radius:3px;color:var(--accent)}
+.msg-text table{border-collapse:collapse;width:100%;font-size:.76rem;margin:.4rem 0}
+.msg-text td,.msg-text th{padding:.28rem .5rem;border:1px solid var(--b1)}
+.msg-text th{background:var(--s2);font-weight:600}
+.msg-text ul{margin:.28rem 0 .28rem 1.1rem}
+.msg-text li{margin-bottom:.15rem;color:var(--muted)}
+.msg-text li>span{color:var(--text)}
 
 /* Tool call */
-.tc{background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:.38rem .7rem;margin-bottom:.4rem;display:flex;align-items:center;gap:.45rem;font-size:.72rem;color:var(--muted);animation:fadeUp .15s ease}
+.tc-wrap{display:flex;flex-direction:column;gap:.3rem;margin-bottom:.4rem}
+.tc{background:var(--s2);border:1px solid var(--b1);border-radius:5px;padding:.32rem .65rem;display:flex;align-items:center;gap:.4rem;font-size:.7rem;color:var(--muted);animation:fadeUp .15s ease}
 .tc-name{font-family:var(--mono);color:var(--accent)}
-.tc-st{margin-left:auto;font-size:.68rem}
-.tc-run{color:var(--gold)}
-.tc-done{color:var(--green)}
+.tc-st{margin-left:auto;font-size:.67rem}
+.tcs-run{color:var(--gold)}
+.tcs-ok{color:var(--green)}
 
-/* Result cards */
-.r-grid{display:flex;flex-direction:column;gap:.45rem;margin:.6rem 0}
-.r-card{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:.8rem 1rem;transition:border-color .15s}
+/* Result card */
+.r-grid{display:flex;flex-direction:column;gap:.42rem;margin:.55rem 0}
+.r-card{background:var(--s1);border:1px solid var(--b1);border-radius:8px;padding:.75rem .95rem;transition:border-color .12s;position:relative}
 .r-card:hover{border-color:var(--b2)}
-.r-title{font-family:var(--serif);font-size:.88rem;margin-bottom:.28rem}
-.r-title a{color:var(--text);text-decoration:none}
+.r-card.saved{border-color:rgba(0,212,170,.25)}
+.r-top{display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;margin-bottom:.28rem}
+.r-title{font-family:var(--serif);font-size:.87rem;line-height:1.42}
+.r-title a{color:var(--text);text-decoration:none;transition:color .12s}
 .r-title a:hover{color:var(--accent)}
-.r-meta{font-size:.72rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.3rem;align-items:center;margin-bottom:.28rem}
+.r-src{font-size:.63rem;font-family:var(--mono);padding:.14rem .48rem;border-radius:4px;white-space:nowrap;flex-shrink:0}
+.src-pm{background:rgba(232,184,75,.1);color:var(--gold)}
+.src-s2{background:rgba(91,143,212,.1);color:var(--blue)}
+.src-oa{background:rgba(0,150,212,.1);color:var(--a2)}
+.r-meta{font-size:.71rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.28rem;align-items:center;margin-bottom:.28rem}
 .r-sep{color:var(--b2)}
-.ev{font-size:.63rem;padding:.1rem .4rem;border-radius:3px;font-weight:600}
+.ev{font-size:.62rem;padding:.1rem .38rem;border-radius:3px;font-weight:600}
 .ev-rct{background:rgba(62,207,142,.12);color:var(--green)}
 .ev-sr{background:rgba(91,143,212,.12);color:var(--blue)}
 .ev-ma{background:rgba(0,212,170,.12);color:var(--accent)}
 .ev-ct{background:rgba(232,184,75,.12);color:var(--gold)}
-.r-abs{font-size:.77rem;color:var(--muted);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.r-acts{margin-top:.45rem;display:flex;gap:.32rem;flex-wrap:wrap}
-.rbtn{font-size:.7rem;padding:.22rem .55rem;border-radius:4px;border:1px solid var(--b2);background:none;color:var(--muted);cursor:pointer;transition:all .12s;text-decoration:none;display:inline-flex;align-items:center;gap:.2rem;font-family:var(--sans)}
+.r-abs{font-size:.76rem;color:var(--muted);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.r-abs.open{-webkit-line-clamp:unset}
+.r-acts{margin-top:.42rem;display:flex;gap:.3rem;flex-wrap:wrap;align-items:center}
+.rbtn{font-size:.68rem;padding:.2rem .52rem;border-radius:4px;border:1px solid var(--b2);background:none;color:var(--muted);cursor:pointer;transition:all .11s;text-decoration:none;display:inline-flex;align-items:center;gap:.2rem;font-family:var(--sans)}
 .rbtn:hover{color:var(--text);border-color:var(--text)}
 .rbtn-a{color:var(--accent);border-color:rgba(0,212,170,.22)}
 .rbtn-a:hover{background:rgba(0,212,170,.07)}
+.rbtn-save{color:var(--green);border-color:rgba(62,207,142,.22)}
+.rbtn-save:hover{background:rgba(62,207,142,.07)}
+.cites{margin-left:auto;font-family:var(--mono);font-size:.63rem;color:var(--dim)}
+
+/* PICO visual */
+.pico-visual{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:.65rem 0}
+@media(max-width:480px){.pico-visual{grid-template-columns:1fr}}
+.pico-box{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.65rem}
+.pico-letter{font-family:var(--mono);font-size:1.1rem;font-weight:500;color:var(--accent);margin-bottom:.2rem}
+.pico-lbl{font-size:.63rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.28rem}
+.pico-val{font-size:.79rem;line-height:1.5}
+
+/* GRADE visual */
+.grade-visual{background:var(--bg);border:1px solid var(--b1);border-radius:8px;padding:.85rem;margin:.55rem 0}
+.grade-row{display:flex;align-items:center;justify-content:space-between;font-size:.78rem;padding:.22rem 0;border-bottom:1px solid var(--b1)}
+.grade-row:last-of-type{border-bottom:none}
+.gr-domain{color:var(--muted)}
+.gr-val{font-weight:500}
+.gr-ok{color:var(--green)}
+.gr-serious{color:var(--gold)}
+.gr-very{color:var(--red)}
+.grade-overall{margin-top:.65rem;padding:.55rem;background:var(--s2);border-radius:6px;display:flex;align-items:center;gap:.65rem}
+.grade-dots{display:flex;gap:.2rem}
+.gd{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:.58rem;font-weight:600}
+.gd-full{background:var(--accent);color:var(--bg)}
+.gd-empty{background:var(--b2);color:var(--dim)}
+.grade-label-text{font-size:.8rem;font-weight:600}
+
+/* RoB visual */
+.rob-visual{display:flex;flex-direction:column;gap:.3rem;margin:.55rem 0}
+.rob-row{display:flex;align-items:center;gap:.65rem;background:var(--bg);border:1px solid var(--b1);border-radius:5px;padding:.45rem .65rem}
+.rob-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.rd-low{background:var(--green)}.rd-some{background:var(--gold)}.rd-high{background:var(--red)}
+.rob-d{font-size:.76rem;flex:1}
+.rob-j{font-size:.69rem;color:var(--muted)}
+.rob-overall{margin-top:.4rem;font-size:.78rem;padding:.4rem .65rem;border-radius:5px;font-weight:500}
+
+/* Stats visual */
+.stats-visual{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.55rem 0}
+@media(max-width:480px){.stats-visual{grid-template-columns:repeat(2,1fr)}}
+.stat-box{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.6rem;text-align:center}
+.stat-val{font-family:var(--mono);font-size:1.25rem;margin-bottom:.12rem}
+.stat-lbl{font-size:.65rem;color:var(--muted)}
+.stat-ci{font-size:.62rem;color:var(--dim);font-family:var(--mono)}
 
 /* Typing */
-.typing{display:flex;align-items:center;gap:.25rem;padding:.35rem 0}
+.typing{display:flex;align-items:center;gap:.22rem;padding:.3rem 0}
 .td{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:bounce .9s infinite}
 .td:nth-child(2){animation-delay:.15s}.td:nth-child(3){animation-delay:.3s}
 @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
 
 /* ── Input ── */
-.input-wrap{padding:.85rem 1.25rem 1rem;border-top:1px solid var(--b1);background:rgba(8,12,18,.8);backdrop-filter:blur(12px);flex-shrink:0}
-.input-box{background:var(--s1);border:1px solid var(--b2);border-radius:var(--r);overflow:hidden;transition:border-color .2s,box-shadow .2s}
-.input-box:focus-within{border-color:rgba(0,212,170,.4);box-shadow:0 0 0 1px rgba(0,212,170,.08)}
-.input-row{display:flex;align-items:flex-end;padding:.35rem .35rem .35rem .9rem;gap:.4rem}
-.inp{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:var(--sans);font-size:.87rem;resize:none;max-height:120px;line-height:1.6;padding:.38rem 0}
+.input-wrap{padding:.75rem 1.25rem .9rem;border-top:1px solid var(--b1);background:rgba(8,12,18,.8);backdrop-filter:blur(12px);flex-shrink:0}
+.qb-hint{font-size:.7rem;color:var(--dim);font-family:var(--mono);margin-bottom:.4rem;display:flex;align-items:center;gap:.4rem}
+.qb-btn{background:none;border:1px solid var(--b1);color:var(--muted);padding:.18rem .5rem;border-radius:4px;font-size:.68rem;cursor:pointer;font-family:var(--sans);transition:all .1s}
+.qb-btn:hover{border-color:var(--accent);color:var(--accent)}
+.input-box{background:var(--s1);border:1px solid var(--b2);border-radius:var(--r);overflow:hidden;transition:border-color .18s,box-shadow .18s}
+.input-box:focus-within{border-color:rgba(0,212,170,.38);box-shadow:0 0 0 1px rgba(0,212,170,.07)}
+.inp-row{display:flex;align-items:flex-end;padding:.3rem .3rem .3rem .85rem;gap:.38rem}
+.inp{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:var(--sans);font-size:.86rem;resize:none;max-height:120px;line-height:1.6;padding:.35rem 0}
 .inp::placeholder{color:var(--dim)}
-.send{width:32px;height:32px;background:var(--accent);border:none;border-radius:6px;display:grid;place-items:center;cursor:pointer;transition:all .12s;flex-shrink:0}
-.send:hover{opacity:.9;transform:scale(1.04)}
-.send:disabled{background:var(--b2);cursor:not-allowed;transform:none;opacity:1}
-.send svg{width:15px;height:15px;fill:var(--bg)}
-.inp-footer{display:flex;gap:.38rem;padding:.42rem .9rem .52rem;border-top:1px solid var(--b1);flex-wrap:wrap;align-items:center}
-.chip{font-size:.65rem;font-family:var(--mono);padding:.13rem .45rem;border-radius:4px;background:var(--s2);color:var(--muted);border:1px solid var(--b1)}
+.send-btn{width:31px;height:31px;background:var(--accent);border:none;border-radius:6px;display:grid;place-items:center;cursor:pointer;transition:all .11s;flex-shrink:0}
+.send-btn:hover{opacity:.9;transform:scale(1.04)}
+.send-btn:disabled{background:var(--b2);cursor:not-allowed;transform:none;opacity:1}
+.send-btn svg{width:14px;height:14px;fill:var(--bg)}
+.inp-footer{display:flex;gap:.32rem;padding:.38rem .85rem .48rem;border-top:1px solid var(--b1);flex-wrap:wrap;align-items:center}
+.chip{font-size:.63rem;font-family:var(--mono);padding:.12rem .42rem;border-radius:4px;background:var(--s2);color:var(--muted);border:1px solid var(--b1);cursor:pointer;transition:all .1s}
 .chip.on{background:rgba(0,212,170,.07);color:var(--accent);border-color:rgba(0,212,170,.18)}
-.more{font-size:.65rem;color:var(--dim);cursor:pointer;margin-left:auto}
-.more:hover{color:var(--muted)}
+.chip:hover{border-color:var(--b2)}
+.more-chip{font-size:.63rem;color:var(--dim);cursor:pointer;margin-left:auto}
+.more-chip:hover{color:var(--muted)}
+
+/* ── Right panel — Workspace ── */
+.rsb{width:268px;flex-shrink:0;border-left:1px solid var(--b1);display:none;flex-direction:column;background:rgba(8,12,18,.5);overflow-y:auto}
+.rsb.open{display:flex}
+@media(max-width:1080px){.rsb{display:none!important}}
+.rsb-header{padding:.85rem 1rem;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between}
+.rsb-title{font-size:.78rem;font-weight:600;display:flex;align-items:center;gap:.4rem}
+.rsb-count{font-family:var(--mono);font-size:.65rem;background:rgba(0,212,170,.1);color:var(--accent);padding:.1rem .38rem;border-radius:10px}
+.rsb-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:.9rem;padding:.1rem}
+.rsb-paper{padding:.65rem 1rem;border-bottom:1px solid var(--b1);cursor:pointer;transition:background .1s}
+.rsb-paper:hover{background:var(--s1)}
+.rsp-title{font-size:.77rem;line-height:1.4;margin-bottom:.18rem;font-family:var(--serif);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rsp-meta{font-size:.68rem;color:var(--muted)}
+.rsp-acts{display:flex;gap:.25rem;margin-top:.35rem}
+.rsp-rm{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.68rem;font-family:var(--sans);padding:0;transition:color .1s}
+.rsp-rm:hover{color:var(--red)}
+.rsb-empty{padding:1.5rem 1rem;text-align:center;color:var(--dim);font-size:.78rem}
+.rsb-actions{padding:.85rem 1rem;border-top:1px solid var(--b1);display:flex;flex-direction:column;gap:.35rem;margin-top:auto}
+.rsb-export-btn{background:none;border:1px solid var(--b1);color:var(--muted);padding:.38rem .7rem;border-radius:6px;font-size:.74rem;cursor:pointer;text-align:left;transition:all .1s;font-family:var(--sans);display:flex;align-items:center;gap:.35rem}
+.rsb-export-btn:hover{border-color:var(--accent);color:var(--accent)}
+.rsb-note-input{width:100%;background:var(--bg);border:1px solid var(--b1);color:var(--text);padding:.42rem .65rem;border-radius:6px;font-family:var(--sans);font-size:.75rem;outline:none;resize:none}
+.rsb-note-input:focus{border-color:var(--accent)}
+.note-item{font-size:.73rem;color:var(--muted);padding:.42rem .7rem;background:var(--s2);border-radius:5px;margin:.3rem 1rem;line-height:1.5}
 
 /* ── Modals ── */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);z-index:500;display:none;align-items:center;justify-content:center;padding:1rem}
 .overlay.open{display:flex}
-.modal{background:var(--s1);border:1px solid var(--b2);border-radius:14px;padding:1.65rem;width:100%;max-width:460px;box-shadow:0 24px 64px rgba(0,0,0,.6);animation:fadeUp .2s ease}
-.modal h3{font-family:var(--serif);font-size:1.15rem;margin-bottom:.3rem}
-.modal-sub{font-size:.8rem;color:var(--muted);margin-bottom:1.4rem;line-height:1.65}
-
-/* Google sign-in area */
-.google-area{display:flex;flex-direction:column;align-items:center;gap:.75rem;margin-bottom:1.25rem}
-.google-btn{display:flex;align-items:center;gap:.75rem;background:var(--s2);border:1px solid var(--b2);border-radius:8px;padding:.6rem 1.25rem;cursor:pointer;font-size:.85rem;font-weight:500;color:var(--text);transition:all .15s;width:100%;justify-content:center}
-.google-btn:hover{border-color:rgba(66,133,244,.4);background:rgba(66,133,244,.06)}
-.google-logo{width:18px;height:18px}
-
-.divider{display:flex;align-items:center;gap:.75rem;color:var(--dim);font-size:.75rem;margin-bottom:1.1rem}
-.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--b1)}
-
-/* Provider selector */
-.prov-row{display:flex;gap:.45rem;margin-bottom:1rem}
-.prov{flex:1;border:1px solid var(--b2);border-radius:8px;padding:.6rem .5rem;cursor:pointer;transition:all .12s;text-align:center}
+.modal{background:var(--s1);border:1px solid var(--b2);border-radius:14px;padding:1.55rem;width:100%;max-width:460px;box-shadow:0 24px 64px rgba(0,0,0,.6);animation:fadeUp .2s ease}
+.modal h3{font-family:var(--serif);font-size:1.12rem;margin-bottom:.28rem}
+.modal-sub{font-size:.79rem;color:var(--muted);margin-bottom:1.3rem;line-height:1.65}
+.prov-row{display:flex;gap:.42rem;margin-bottom:.95rem}
+.prov{flex:1;border:1px solid var(--b2);border-radius:8px;padding:.55rem .45rem;cursor:pointer;transition:all .11s;text-align:center}
 .prov:hover{border-color:var(--b2)}
 .prov.sel{border-color:var(--accent);background:rgba(0,212,170,.05)}
-.prov-logo{font-size:1.2rem;margin-bottom:.2rem}
-.prov-name{font-size:.74rem;font-weight:500}
-
-.lbl{font-size:.75rem;color:var(--muted);margin-bottom:.35rem;display:block}
-.minp{width:100%;background:var(--bg);border:1px solid var(--b2);color:var(--text);padding:.5rem .8rem;border-radius:7px;font-family:var(--mono);font-size:.8rem;outline:none;margin-bottom:.7rem;transition:border-color .15s}
+.prov-logo{font-size:1.15rem;margin-bottom:.18rem}
+.prov-name{font-size:.72rem;font-weight:500}
+.mlbl{font-size:.74rem;color:var(--muted);margin-bottom:.32rem;display:block}
+.minp{width:100%;background:var(--bg);border:1px solid var(--b2);color:var(--text);padding:.48rem .78rem;border-radius:7px;font-family:var(--mono);font-size:.79rem;outline:none;margin-bottom:.65rem;transition:border-color .12s}
 .minp:focus{border-color:var(--accent)}
 .minp::placeholder{color:var(--dim)}
-
-.model-row{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:1.1rem}
-.model-opt{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.5rem .65rem;cursor:pointer;transition:all .12s}
-.model-opt:hover{border-color:var(--b2)}
-.model-opt.sel{border-color:var(--accent);background:rgba(0,212,170,.05)}
-.mo-name{font-size:.76rem;font-weight:500}
-.mo-desc{font-size:.65rem;color:var(--muted)}
-
-.note{font-size:.7rem;color:var(--dim);background:var(--bg);border:1px solid var(--b1);border-radius:6px;padding:.45rem .7rem;margin-bottom:1.1rem;line-height:1.6}
-
-.mbtns{display:flex;gap:.45rem;justify-content:flex-end}
-.mbtn{padding:.48rem 1.15rem;border-radius:7px;font-family:var(--sans);font-size:.8rem;font-weight:600;cursor:pointer;transition:all .12s}
+.model-row{display:grid;grid-template-columns:1fr 1fr;gap:.38rem;margin-bottom:1rem}
+.mopt{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.48rem .62rem;cursor:pointer;transition:all .11s}
+.mopt:hover{border-color:var(--b2)}
+.mopt.sel{border-color:var(--accent);background:rgba(0,212,170,.05)}
+.mo-n{font-size:.74rem;font-weight:500}
+.mo-d{font-size:.63rem;color:var(--muted)}
+.mnote{font-size:.68rem;color:var(--dim);background:var(--bg);border:1px solid var(--b1);border-radius:5px;padding:.42rem .68rem;margin-bottom:1rem;line-height:1.6}
+.mbtns{display:flex;gap:.42rem;justify-content:flex-end}
+.mbtn{padding:.46rem 1.1rem;border-radius:7px;font-family:var(--sans);font-size:.79rem;font-weight:600;cursor:pointer;transition:all .11s}
 .mbtn-c{background:none;border:1px solid var(--b2);color:var(--muted)}
 .mbtn-c:hover{color:var(--text);border-color:var(--text)}
 .mbtn-s{background:var(--accent);border:none;color:var(--bg)}
 .mbtn-s:hover{opacity:.9}
+.google-area{margin-bottom:1.1rem}
+.g-divider{display:flex;align-items:center;gap:.65rem;color:var(--dim);font-size:.72rem;margin:.9rem 0}
+.g-divider::before,.g-divider::after{content:'';flex:1;height:1px;background:var(--b1)}
 
 /* Quota modal */
-.quota-opts{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem}
-.qopt{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:.75rem;cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:.65rem}
+.qopts{display:flex;flex-direction:column;gap:.45rem;margin-bottom:.9rem}
+.qopt{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:.68rem;cursor:pointer;transition:all .11s;display:flex;align-items:center;gap:.6rem}
 .qopt:hover{border-color:var(--accent)}
-.qopt-icon{font-size:1.2rem}
-.qopt-info{flex:1}
-.qopt-title{font-size:.82rem;font-weight:600;margin-bottom:.15rem}
-.qopt-desc{font-size:.72rem;color:var(--muted)}
+.qo-ico{font-size:1.15rem}
+.qo-t{font-size:.8rem;font-weight:600;margin-bottom:.12rem}
+.qo-d{font-size:.7rem;color:var(--muted)}
+
+/* Tools drawer */
+.tools-drawer{position:fixed;right:0;top:52px;bottom:0;width:280px;background:var(--s1);border-left:1px solid var(--b1);z-index:90;transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column;overflow-y:auto}
+.tools-drawer.open{transform:translateX(0)}
+.td-header{padding:1rem;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.td-title{font-size:.8rem;font-weight:600}
+.td-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem}
+.td-sec{padding:.65rem 1rem .2rem;font-size:.62rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--dim)}
+.td-tool{padding:.46rem 1rem;display:flex;align-items:center;gap:.55rem;cursor:pointer;transition:background .1s;font-size:.76rem}
+.td-tool:hover{background:var(--s2)}
+.td-tool-ico{font-size:.88rem;width:18px;text-align:center;flex-shrink:0}
+.td-tool-name{flex:1;font-weight:500}
+.td-tag{font-size:.6rem;padding:.09rem .35rem;border-radius:3px}
+.tt-free{background:rgba(0,212,170,.1);color:var(--accent)}
+.tt-pro{background:rgba(155,143,212,.1);color:var(--purple)}
 
 /* Alert */
-.alert{position:fixed;top:1rem;right:1rem;z-index:600;background:var(--s1);border:1px solid var(--b2);border-radius:8px;padding:.65rem 1rem;font-size:.8rem;display:flex;align-items:center;gap:.5rem;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:slideIn .2s ease;max-width:320px}
-@keyframes slideIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
-.alert-icon{font-size:.9rem}
+.alert{position:fixed;bottom:1.25rem;right:1.25rem;z-index:600;background:var(--s1);border:1px solid var(--b2);border-radius:8px;padding:.6rem .95rem;font-size:.78rem;display:flex;align-items:center;gap:.45rem;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:slideUp .2s ease;max-width:300px}
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* Export download */
+.dl-area{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.85rem;margin-top:.65rem}
+.dl-area pre{font-family:var(--mono);font-size:.72rem;color:var(--muted);white-space:pre-wrap;line-height:1.6;max-height:200px;overflow-y:auto}
+.dl-actions{display:flex;gap:.4rem;margin-top:.55rem}
+
+/* ── Mobile ── */
+.hamburger{display:none;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:.26rem .45rem;line-height:1}
+.lsb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:79}
+@media(max-width:780px){
+  .hamburger{display:flex;align-items:center}
+  .lsb{display:flex!important;position:fixed;left:0;top:52px;bottom:0;z-index:80;transform:translateX(-100%);transition:transform .22s ease;width:240px}
+  .lsb.open{transform:translateX(0)}
+  .lsb-overlay.open{display:block}
+  .msgs{padding:.75rem .85rem}
+  .input-wrap{padding:.55rem .75rem .7rem}
+  .mode-bar{padding:0 .35rem}
+  .mode-tab{padding:.45rem .6rem;font-size:.72rem}
+  .rsb{display:none!important}
+  .hright .quota-pill{display:none}
+}
+@media(max-width:480px){
+  .hbadge{display:none}
+  .mode-tab span{display:none}
+}
 </style>
 </head>
 <body>
@@ -224,44 +345,24 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 <!-- Auth Modal -->
 <div class="overlay" id="authModal">
   <div class="modal">
-    <h3>Welcome to ClinSearch</h3>
-    <p class="modal-sub">Sign in to get 20 free AI queries per day. Or add your own API key for unlimited use.</p>
-
+    <h3>ClinSearch</h3>
+    <p class="modal-sub">Sign in with Google for 20 free AI queries per day — or add your own API key for unlimited use.</p>
     <div class="google-area">
-      <!-- Google One Tap / Sign In button -->
-      <div id="g_id_onload"
-        data-client_id="GOOGLE_CLIENT_ID_PLACEHOLDER"
-        data-callback="handleGoogleSignIn"
-        data-auto_prompt="false">
-      </div>
-      <div class="g_id_signin"
-        data-type="standard"
-        data-shape="rectangular"
-        data-theme="filled_black"
-        data-text="signin_with"
-        data-size="large"
-        data-width="360">
-      </div>
-      <div style="font-size:.72rem;color:var(--dim)">or continue without signing in (5 free queries)</div>
+      <div id="g_id_onload" data-client_id="GOOGLE_CLIENT_ID_PLACEHOLDER" data-callback="handleGoogleSignIn" data-auto_prompt="false"></div>
+      <div class="g_id_signin" data-type="standard" data-theme="filled_black" data-text="signin_with" data-size="large" data-width="400"></div>
     </div>
-
-    <div class="divider">or add your own API key</div>
-
+    <div class="g-divider">or use your own AI key (unlimited)</div>
     <div class="prov-row">
       <div class="prov sel" id="prov-claude" onclick="selProv('claude')"><div class="prov-logo">🟠</div><div class="prov-name">Claude</div></div>
-      <div class="prov" id="prov-openai" onclick="selProv('openai')"><div class="prov-logo">🟢</div><div class="prov-name">ChatGPT</div></div>
+      <div class="prov" id="prov-openai" onclick="selProv('openai')"><div class="prov-logo">🟢</div><div class="prov-name">OpenAI</div></div>
     </div>
-
-    <label class="lbl">API Key — used directly in your browser</label>
+    <label class="mlbl">API Key</label>
     <input class="minp" id="userKey" type="password" placeholder="sk-ant-..."/>
-
     <div id="modelSel" class="model-row">
-      <div class="model-opt sel" id="m0" onclick="selModel(0)"><div class="mo-name">claude-sonnet-4</div><div class="mo-desc">Recommended</div></div>
-      <div class="model-opt" id="m1" onclick="selModel(1)"><div class="mo-name">claude-opus-4</div><div class="mo-desc">Most capable</div></div>
+      <div class="mopt sel" id="m0" onclick="selMdl(0)"><div class="mo-n">claude-sonnet-4</div><div class="mo-d">Recommended</div></div>
+      <div class="mopt" id="m1" onclick="selMdl(1)"><div class="mo-n">claude-opus-4</div><div class="mo-d">Most capable</div></div>
     </div>
-
-    <div class="note">🔒 API keys stay in your browser only — never sent to ClinSearch servers.</div>
-
+    <div class="mnote">🔒 Your key stays in your browser only — never sent to our servers. All Claude/OpenAI calls go directly from your browser.</div>
     <div class="mbtns">
       <button class="mbtn mbtn-c" onclick="startDemo()">Try demo</button>
       <button class="mbtn mbtn-s" onclick="saveAuth()">Start →</button>
@@ -269,439 +370,540 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
   </div>
 </div>
 
-<!-- Quota exceeded modal -->
+<!-- Quota Modal -->
 <div class="overlay" id="quotaModal">
   <div class="modal">
     <h3>Daily limit reached</h3>
-    <p class="modal-sub">You've used your 20 free queries today. Choose an option:</p>
-    <div class="quota-opts">
-      <div class="qopt" onclick="openAuthForKey()"><div class="qopt-icon">🔑</div><div class="qopt-info"><div class="qopt-title">Add your API key</div><div class="qopt-desc">Claude or OpenAI — unlimited queries, you pay per use</div></div></div>
-      <div class="qopt" onclick="closeQuota()"><div class="qopt-icon">🕐</div><div class="qopt-info"><div class="qopt-title">Come back tomorrow</div><div class="qopt-desc">Quota resets daily at midnight UTC</div></div></div>
+    <p class="modal-sub">You've used your 20 free queries today.</p>
+    <div class="qopts">
+      <div class="qopt" onclick="closeQuota();openAuthModal()"><div class="qo-ico">🔑</div><div><div class="qo-t">Add your API key</div><div class="qo-d">Claude or OpenAI — unlimited, you pay per use</div></div></div>
+      <div class="qopt" onclick="closeQuota()"><div class="qo-ico">🕐</div><div><div class="qo-t">Come back tomorrow</div><div class="qo-d">Quota resets daily at midnight UTC</div></div></div>
     </div>
     <button class="mbtn mbtn-c" style="width:100%" onclick="closeQuota()">Close</button>
   </div>
 </div>
 
+<!-- Sidebar overlay (mobile) -->
+<div class="lsb-overlay" id="lsbOverlay" onclick="closeSidebar()"></div>
+
+<!-- Header -->
 <header>
-  <div class="logo"><div class="logo-mark">CS</div>ClinSearch</div>
+  <div style="display:flex;align-items:center;gap:.4rem">
+    <button class="hamburger" onclick="toggleSidebar()" title="Menu">☰</button>
+    <div class="logo"><div class="logo-mark">CS</div>ClinSearch</div>
+  </div>
   <div class="hright">
-    <span class="ai-badge" id="aiBadge">Loading…</span>
+    <span class="hbadge hb-ai-none" id="aiBadge">Loading…</span>
     <span class="quota-pill qp-ok" id="quotaPill">… / 20</span>
-    <div class="user-btn" id="userBtn" onclick="toggleUserMenu()">
-      <div class="user-avatar" id="userAvatar">?</div>
+    <div class="user-btn" id="userBtn" onclick="openAuthModal()">
+      <div class="av" id="userAv">?</div>
       <span id="userName">Sign in</span>
     </div>
+    <button style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .6rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .1s" onclick="toggleTools()">⚡ Tools</button>
+    <button style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .6rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .1s" id="wsBtn" onclick="toggleWorkspace()">📁 Workspace <span id="wsCount" style="font-family:var(--mono);font-size:.62rem;color:var(--accent)"></span></button>
   </div>
 </header>
 
+<!-- App -->
 <div class="app">
-  <div class="sidebar">
-    <div class="sb-top"><button class="new-btn" onclick="newChat()">＋ New chat</button></div>
-    <div class="sb-sec">Recent</div>
-    <div class="hist on">Dupilumab AD systematic review</div>
-    <div class="hist">BCC hedgehog inhibitors</div>
-    <div class="hist">Hidradenitis biologics 2024</div>
-    <div class="hist">Melanoma immunotherapy</div>
-    <div class="hist">FFA trichology outcomes</div>
-    <div class="sb-bottom">
-      <button class="sb-btn" onclick="openSettings()">⚙️ API Settings</button>
-      <button class="sb-btn" onclick="openAuthModal()">🔑 Sign in / API key</button>
+
+  <!-- Left sidebar -->
+  <div class="lsb">
+    <div class="lsb-top"><button class="new-btn" onclick="newChat()">＋ New chat</button></div>
+    <div class="sec-lbl">Sessions</div>
+    <div class="hist on" id="h0">Evidence review — AD biologics</div>
+    <div class="hist" id="h1">BCC hedgehog inhibitors</div>
+    <div class="hist" id="h2">Hidradenitis suppurativa</div>
+    <div class="hist" id="h3">Melanoma immunotherapy</div>
+    <div class="lsb-bot">
+      <button class="lsb-btn" onclick="openAuthModal()">⚙️ AI Settings</button>
+      <button class="lsb-btn" onclick="toggleWorkspace()">📁 Workspace</button>
+      <button class="lsb-btn" onclick="toggleTools()">⚡ All Tools (44)</button>
     </div>
   </div>
 
-  <div class="chat">
+  <!-- Chat -->
+  <div class="chat-area">
+
+    <!-- Mode bar -->
+    <div class="mode-bar">
+      <div class="mode-tab on" id="mt-chat" onclick="setMode('chat')">💬 Chat</div>
+      <div class="mode-tab" id="mt-search" onclick="setMode('search')">🔍 Search</div>
+      <div class="mode-tab" id="mt-trials" onclick="setMode('trials')">🏥 Trials</div>
+      <div class="mode-tab" id="mt-paper" onclick="setMode('paper')">📄 Paper</div>
+      <div class="mode-tab" id="mt-stats" onclick="setMode('stats')">🧮 Stats</div>
+      <div class="mode-tab" id="mt-export" onclick="setMode('export')">📦 Export</div>
+    </div>
+
     <div class="msgs" id="msgs">
-      <div class="welcome" id="welcome">
-        <div class="wlc-eye">Evidence-based medicine</div>
-        <h2>Ask anything clinical</h2>
-        <p>ClinSearch searches PubMed, Semantic Scholar, OpenAlex, ClinicalTrials.gov and more — then synthesises the evidence using AI.</p>
-        <div class="sugs">
-          <div class="sug" onclick="useSug(this)"><strong>Evidence review</strong>Best biologics for moderate-to-severe atopic dermatitis — RCT evidence</div>
-          <div class="sug" onclick="useSug(this)"><strong>Comparison</strong>Dupilumab vs tralokinumab efficacy and safety head-to-head</div>
-          <div class="sug" onclick="useSug(this)"><strong>Research gaps</strong>What are unresolved questions in hidradenitis suppurativa treatment?</div>
-          <div class="sug" onclick="useSug(this)"><strong>Trials</strong>Phase 3 trials recruiting now for basal cell carcinoma</div>
+      <!-- Welcome + wizard -->
+      <div id="welcome">
+        <div class="welcome">
+          <div class="wlc-eye">Evidence-based medicine</div>
+          <h2>What are you researching?</h2>
+          <p>Choose your workflow or just ask a clinical question. ClinSearch uses 44 tools across 10+ databases to find and synthesise the evidence.</p>
+        </div>
+        <div class="wizard">
+          <div class="wiz-title">Research workflow</div>
+          <div class="wiz-grid">
+            <div class="wiz-opt" id="w0" onclick="pickWizard('quick_review',this)">
+              <div class="wo-icon">⚡</div>
+              <div class="wo-title">Quick Evidence Review</div>
+              <div class="wo-desc">Best evidence on a topic in 2 minutes</div>
+            </div>
+            <div class="wiz-opt" id="w1" onclick="pickWizard('systematic',this)">
+              <div class="wo-icon">📋</div>
+              <div class="wo-title">Systematic Review</div>
+              <div class="wo-desc">Full PRISMA workflow with GRADE</div>
+            </div>
+            <div class="wiz-opt" id="w2" onclick="pickWizard('single_paper',this)">
+              <div class="wo-icon">🔬</div>
+              <div class="wo-title">Analyse a Paper</div>
+              <div class="wo-desc">PICO · RoB · Citations · Fulltext</div>
+            </div>
+            <div class="wiz-opt" id="w3" onclick="pickWizard('gap_analysis',this)">
+              <div class="wo-icon">🗺️</div>
+              <div class="wo-title">Research Gaps</div>
+              <div class="wo-desc">Find unexplored areas in a field</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- Input -->
     <div class="input-wrap">
+      <div id="qbHint" style="display:none" class="qb-hint">
+        💡 Query Builder active — I'll optimise your search terms
+        <button class="qb-btn" onclick="toggleQB()">✕ disable</button>
+      </div>
       <div class="input-box">
-        <div class="input-row">
-          <textarea class="inp" id="inp" rows="1" placeholder="Ask a clinical question…" onkeydown="onKey(event)" oninput="resize(this)"></textarea>
-          <button class="send" id="sendBtn" onclick="send()">
+        <div class="inp-row">
+          <textarea class="inp" id="inp" rows="1" placeholder="Ask a clinical question or enter a topic…" onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+          <button class="send-btn" id="sendBtn" onclick="send()">
             <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </button>
         </div>
-        <div class="inp-footer">
-          <span class="chip on">PubMed</span>
-          <span class="chip on">S. Scholar</span>
-          <span class="chip on">OpenAlex</span>
-          <span class="chip on">ClinTrials</span>
-          <span class="chip">PICO</span>
-          <span class="chip">GRADE</span>
-          <span class="more" onclick="openSettings()">+38 tools →</span>
+        <div class="inp-footer" id="chipRow">
+          <span class="chip on" data-t="pubmed">PubMed</span>
+          <span class="chip on" data-t="s2">S. Scholar</span>
+          <span class="chip on" data-t="openalex">OpenAlex</span>
+          <span class="chip on" data-t="trials">Trials</span>
+          <span class="chip" data-t="pico" id="picoChip">PICO</span>
+          <span class="chip" data-t="grade" id="gradeChip">GRADE</span>
+          <span class="chip" data-t="rob" id="robChip">RoB</span>
+          <span class="chip" data-t="qb" id="qbChip">🤖 Query Builder</span>
+          <span class="more-chip" onclick="toggleTools()">+37 tools →</span>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Workspace (right panel) -->
+  <div class="rsb" id="workspace">
+    <div class="rsb-header">
+      <div class="rsb-title">📁 Workspace <span class="rsb-count" id="wsCountBadge">0</span></div>
+      <button class="rsb-close" onclick="toggleWorkspace()">✕</button>
+    </div>
+    <div id="wsPapers">
+      <div class="rsb-empty">Save papers here to build your reading list.<br>Click 💾 on any result.</div>
+    </div>
+    <div style="padding:.5rem 1rem;border-top:1px solid var(--b1);border-bottom:1px solid var(--b1)">
+      <textarea class="rsb-note-input" id="noteInput" rows="2" placeholder="Add a research note…"></textarea>
+      <button onclick="addNote()" style="width:100%;background:none;border:1px solid var(--b1);color:var(--muted);padding:.3rem;border-radius:5px;font-size:.72rem;cursor:pointer;margin-top:.3rem;font-family:var(--sans);transition:all .1s">Save note</button>
+    </div>
+    <div id="wsNotes"></div>
+    <div class="rsb-actions">
+      <div style="font-size:.65rem;font-family:var(--mono);color:var(--dim);margin-bottom:.3rem">EXPORT WORKSPACE</div>
+      <button class="rsb-export-btn" id="exp-ris" onclick="exportWS('ris',this)">📄 Export RIS (Zotero)</button>
+      <button class="rsb-export-btn" id="exp-csv" onclick="exportWS('csv',this)">📊 Export CSV (Rayyan)</button>
+      <button class="rsb-export-btn" id="exp-van" onclick="exportWS('vancouver',this)">📖 Vancouver bibliography</button>
+      <button class="rsb-export-btn" id="exp-sum" onclick="exportWS('summary',this)">🤖 AI synthesis of saved papers</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Tools drawer -->
+<div class="tools-drawer" id="toolsDrawer">
+  <div class="td-header">
+    <span class="td-title">⚡ All Tools (44)</span>
+    <button class="td-close" onclick="toggleTools()">✕</button>
+  </div>
+  <div id="toolsContent"></div>
 </div>
 
 <script>
-// ── Config ───────────────────────────────────────────────────────────────────
-const API = 'https://clinsearch-api.onrender.com'; // Replace with your backend URL
+const API = 'https://clinsearch-api.onrender.com';
 
 // ── State ────────────────────────────────────────────────────────────────────
-let state = {
-  session: null,       // JWT from Google login
-  user: null,          // {name, email, picture}
-  userKey: '',         // User's own API key
-  userProvider: '',    // 'claude' | 'openai'
-  userModel: '',
-  history: [],
-  quota: {used:0, limit:20},
-  aiProvider: '',      // Current active AI
-  isDemo: false,
+const S = {
+  session: null, user: null,
+  userKey: '', userProvider: 'claude', userModel: 'claude-sonnet-4-20250514',
+  history: [], quota: {used:0,limit:20},
+  aiProvider: '', isDemo: false,
+  workspace: [], notes: [],
+  sessionId: null,
+  mode: 'chat', qbActive: false,
+  activeWizard: null,
 };
 
-// Load saved state
-const saved = localStorage.getItem('cs_state');
-if (saved) {
-  try {
-    const s = JSON.parse(saved);
-    state.session     = s.session;
-    state.user        = s.user;
-    state.userKey     = s.userKey || '';
-    state.userProvider= s.userProvider || '';
-    state.userModel   = s.userModel || '';
-  } catch(e) {}
-}
+// Load saved
+try {
+  const sv = JSON.parse(localStorage.getItem('cs_v3')||'{}');
+  Object.assign(S, {
+    session:sv.session||null, user:sv.user||null,
+    userKey:sv.userKey||'', userProvider:sv.userProvider||'claude',
+    userModel:sv.userModel||'claude-sonnet-4-20250514',
+    workspace:sv.workspace||[], notes:sv.notes||[],
+    sessionId:sv.sessionId||null,
+  });
+} catch(e) {}
 
-// ── Init ─────────────────────────────────────────────────────────────────────
-window.addEventListener('load', async () => {
-  // Check for auth callback
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('token')) {
-    state.session = params.get('token');
-    state.user = { name: params.get('name'), email: params.get('email') };
-    saveState();
-    window.history.replaceState({}, '', '/');
-  }
-
-  // Update UI
-  updateUserUI();
-  await fetchQuota();
-  await fetchAIStatus();
-
-  // Show auth modal if no session and no key
-  if (!state.session && !state.userKey) {
-    setTimeout(() => openAuthModal(), 600);
-  }
-});
-
-function saveState() {
-  localStorage.setItem('cs_state', JSON.stringify({
-    session: state.session,
-    user: state.user,
-    userKey: state.userKey,
-    userProvider: state.userProvider,
-    userModel: state.userModel,
+function save() {
+  localStorage.setItem('cs_v3', JSON.stringify({
+    session:S.session, user:S.user, userKey:S.userKey,
+    userProvider:S.userProvider, userModel:S.userModel,
+    workspace:S.workspace, notes:S.notes, sessionId:S.sessionId,
   }));
 }
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
-function openAuthModal() { document.getElementById('authModal').classList.add('open'); }
-function closeAuthModal() { document.getElementById('authModal').classList.remove('open'); }
-function openSettings() { openAuthModal(); }
+// ── Tools drawer builder ──────────────────────────────────────────────────────
+function buildToolsDrawer() {
+  const sections = [
+    ['Search', [
+      ['🔬','search_pubmed','PubMed / NCBI','free'],
+      ['📖','search_semantic_scholar','Semantic Scholar','free'],
+      ['🌐','search_openalex','OpenAlex 250M+','free'],
+      ['🏥','search_europe_pmc','Europe PMC','free'],
+      ['📚','search_cochrane','Cochrane Library','free'],
+      ['⚗','search_arxiv','arXiv preprints','free'],
+      ['🌍','search_core','CORE OA repos','free'],
+      ['🔍','search_clinical_trials','ClinicalTrials.gov','free'],
+      ['🧬','search_preprints','bioRxiv · medRxiv','free'],
+      ['⭐','search_high_impact','High-impact filter','free'],
+      ['🤖','translate_query','PubMed query builder','free'],
+      ['🏷','get_mesh_terms','MeSH term suggester','free'],
+    ]],
+    ['Evidence Appraisal', [
+      ['🔬','extract_pico','PICO extraction','pro'],
+      ['✅','assess_risk_of_bias','RoB 2 / ROBINS-I','pro'],
+      ['📊','grade_evidence','GRADE assessment','pro'],
+      ['📈','extract_meta_data','Meta-analysis data','pro'],
+      ['🧮','calculate_statistics','OR · RR · NNT · NNH','free'],
+      ['🗺','find_research_gaps','Gap analysis','pro'],
+      ['📋','compare_papers','Comparative table','pro'],
+      ['📝','summarize_papers','Evidence synthesis','pro'],
+    ]],
+    ['Article Tools', [
+      ['📄','get_paper_details','by PMID or DOI','free'],
+      ['📖','read_paper_fulltext','PMC XML · PDF','free'],
+      ['🔗','get_citation_network','Citation graph','free'],
+      ['🔍','find_related_articles','PubMed similarity','free'],
+      ['✅','check_retraction','CrossRef · Retraction Watch','free'],
+      ['🔓','find_free_fulltext','Unpaywall 7-source','free'],
+      ['🌐','translate_abstract','Medical translation','free'],
+    ]],
+    ['Metrics', [
+      ['📊','get_journal_impact','IF · h-index · quartile','free'],
+      ['🤖','get_author_profile','OpenAlex bibliometrics','free'],
+      ['🔍','find_expert_reviewers','Suggest reviewers','free'],
+      ['🔬','rank_evidence','Composite evidence ranking','free'],
+    ]],
+    ['Export & Monitor', [
+      ['📄','export_to_ris','Zotero · Mendeley','free'],
+      ['📊','export_to_csv','Rayyan · Covidence','free'],
+      ['📖','generate_bibliography','Vancouver · APA · ABNT','free'],
+      ['🔔','monitor_topic','Literature alerts','free'],
+      ['🔍','detect_duplicates','Systematic review','free'],
+      ['💡','find_research_gaps','Research opportunities','pro'],
+    ]],
+  ];
+  const cont = document.getElementById('toolsContent');
+  cont.innerHTML = sections.map(([sec, tools]) =>
+    `<div class="td-sec">${sec}</div>` +
+    tools.map(([ico, name, , tier]) =>
+      `<div class="td-tool" onclick="injectTool('${name}')">
+        <div class="td-tool-ico">${ico}</div>
+        <div class="td-tool-name">${name}</div>
+        <span class="td-tag tt-${tier}">${tier}</span>
+      </div>`
+    ).join('')
+  ).join('');
+}
 
-async function handleGoogleSignIn(response) {
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('load', async () => {
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('token')) {
+    S.session = p.get('token');
+    S.user = {name:p.get('name'), email:p.get('email')};
+    save(); history.replaceState({},'','/');
+  }
+  buildToolsDrawer();
+  updateUserUI(); updateAIBadge(); renderWorkspace();
+  await fetchQuota();
+  loadSessions();
+  if (!S.session && !S.userKey) setTimeout(()=>openAuthModal(), 700);
+  if (!S.sessionId) createSession();
+  // Chip click handlers
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', ()=>c.classList.toggle('on')));
+});
+
+// ── Session ───────────────────────────────────────────────────────────────────
+async function createSession() {
   try {
-    const r = await fetch(`${API}/auth/verify`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({credential: response.credential})
-    });
-    const data = await r.json();
-    state.session = data.token;
-    state.user    = data.user;
-    saveState();
-    closeAuthModal();
-    updateUserUI();
-    await fetchQuota();
-    showAlert('✅ Signed in as ' + data.user.name);
-  } catch(e) {
-    showAlert('❌ Sign-in failed: ' + e.message);
-  }
-}
-
-let selProvId = 'claude';
-let selModelIdx = 0;
-const MODELS = {
-  claude: ['claude-sonnet-4-20250514','claude-opus-4-5'],
-  openai: ['gpt-4o','gpt-4-turbo'],
-};
-
-function selProv(p) {
-  selProvId = p;
-  document.querySelectorAll('.prov').forEach(el => el.classList.remove('sel'));
-  document.getElementById('prov-'+p).classList.add('sel');
-  document.getElementById('userKey').placeholder = p==='claude'?'sk-ant-...':'sk-...';
-  const models = MODELS[p];
-  document.getElementById('modelSel').innerHTML = models.map((m,i)=>`
-    <div class="model-opt ${i===0?'sel':''}" id="m${i}" onclick="selModel(${i})">
-      <div class="mo-name">${m.split('-').slice(1,3).join(' ')}</div>
-      <div class="mo-desc">${i===0?'Recommended':'Most capable'}</div>
-    </div>`).join('');
-  selModelIdx = 0;
-}
-
-function selModel(i) {
-  selModelIdx = i;
-  document.querySelectorAll('.model-opt').forEach(el => el.classList.remove('sel'));
-  document.getElementById('m'+i)?.classList.add('sel');
-}
-
-function saveAuth() {
-  const key = document.getElementById('userKey').value.trim();
-  if (key) {
-    state.userKey      = key;
-    state.userProvider = selProvId;
-    state.userModel    = MODELS[selProvId][selModelIdx];
-    saveState();
-    closeAuthModal();
-    updateAIBadge();
-    showAlert(`✅ ${selProvId === 'claude' ? 'Claude' : 'OpenAI'} key saved`);
-  } else {
-    closeAuthModal();
-  }
-}
-
-function startDemo() {
-  state.isDemo = true;
-  closeAuthModal();
-  updateAIBadge();
-}
-
-// ── User UI ──────────────────────────────────────────────────────────────────
-function updateUserUI() {
-  const btn    = document.getElementById('userBtn');
-  const avatar = document.getElementById('userAvatar');
-  const name   = document.getElementById('userName');
-
-  if (state.user) {
-    name.textContent = state.user.name?.split(' ')[0] || 'User';
-    if (state.user.picture) {
-      avatar.innerHTML = `<img src="${state.user.picture}" alt=""/>`;
-    } else {
-      avatar.textContent = (state.user.name || 'U')[0].toUpperCase();
-    }
-  } else {
-    name.textContent = 'Sign in';
-    avatar.textContent = '?';
-  }
-}
-
-async function fetchQuota() {
-  try {
-    const r = await fetch(`${API}/api/quota?token=${state.session || ''}`);
-    const data = await r.json();
-    state.quota = data;
-    updateQuotaUI();
+    const r = await fetch(`${API}/api/session`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',data:{topic:'New session'}})});
+    const d = await r.json();
+    S.sessionId = d.id;
+    save();
   } catch(e) {}
 }
 
-function updateQuotaUI() {
-  const pill = document.getElementById('quotaPill');
-  const { used, limit } = state.quota;
-  const rem = limit - used;
-  pill.textContent = `${used} / ${limit}`;
-  pill.className = 'quota-pill ' + (rem > 5 ? 'qp-ok' : rem > 0 ? 'qp-low' : 'qp-out');
+// ── Auth ──────────────────────────────────────────────────────────────────────
+function openAuthModal(){document.getElementById('authModal').classList.add('open')}
+function closeAuthModal(){document.getElementById('authModal').classList.remove('open')}
+
+async function handleGoogleSignIn(response) {
+  try {
+    const r = await fetch(`${API}/auth/verify`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:response.credential})});
+    const d = await r.json();
+    S.session=d.token; S.user=d.user; save(); closeAuthModal();
+    updateUserUI(); await fetchQuota();
+    showAlert('✓ Signed in as '+d.user.name);
+  } catch(e){showAlert('✗ Sign-in failed');}
 }
 
-async function fetchAIStatus() {
-  try {
-    const r = await fetch(`${API}/health`);
-    const data = await r.json();
-    state.serverAI = data.ai;
-    updateAIBadge();
-  } catch(e) {
-    updateAIBadge();
-  }
+let _prov='claude', _mdlIdx=0;
+const MODELS={claude:['claude-sonnet-4-20250514','claude-opus-4-5'],openai:['gpt-4o','gpt-4-turbo']};
+
+function selProv(p) {
+  _prov=p;
+  document.querySelectorAll('.prov').forEach(e=>e.classList.remove('sel'));
+  document.getElementById('prov-'+p).classList.add('sel');
+  document.getElementById('userKey').placeholder=p==='claude'?'sk-ant-...':'sk-...';
+  document.getElementById('modelSel').innerHTML=MODELS[p].map((m,i)=>`<div class="mopt ${i===0?'sel':''}" id="m${i}" onclick="selMdl(${i})"><div class="mo-n">${m.split('-').slice(1,3).join(' ')}</div><div class="mo-d">${i===0?'Recommended':'Most capable'}</div></div>`).join('');
+  _mdlIdx=0;
+}
+
+function selMdl(i){_mdlIdx=i;document.querySelectorAll('.mopt').forEach(e=>e.classList.remove('sel'));document.getElementById('m'+i)?.classList.add('sel')}
+
+function saveAuth() {
+  const key=document.getElementById('userKey').value.trim();
+  if(key){S.userKey=key;S.userProvider=_prov;S.userModel=MODELS[_prov][_mdlIdx];save();closeAuthModal();updateAIBadge();showAlert(`✓ ${_prov==='claude'?'Claude':'OpenAI'} key saved`);}
+  else closeAuthModal();
+}
+
+function startDemo(){S.isDemo=true;closeAuthModal();updateAIBadge();}
+
+// ── User UI ────────────────────────────────────────────────────────────────────
+function updateUserUI() {
+  const av=document.getElementById('userAv'), nm=document.getElementById('userName');
+  if(S.user){
+    nm.textContent=(S.user.name||'').split(' ')[0]||'User';
+    av.innerHTML=S.user.picture?`<img src="${S.user.picture}"/>`:(S.user.name||'U')[0].toUpperCase();
+  } else {nm.textContent='Sign in';av.textContent='?';}
+}
+
+async function fetchQuota() {
+  try{const r=await fetch(`${API}/api/quota?token=${S.session||''}`);const d=await r.json();S.quota=d;updateQuotaUI();}catch(e){}
+}
+
+function updateQuotaUI() {
+  const pill=document.getElementById('quotaPill');
+  const rem=S.quota.limit-S.quota.used;
+  pill.textContent=`${S.quota.used}/${S.quota.limit}`;
+  pill.className='quota-pill '+(rem>5?'qp-ok':rem>0?'qp-low':'qp-out');
 }
 
 function updateAIBadge() {
-  const badge = document.getElementById('aiBadge');
-  if (state.userKey && state.userProvider) {
-    badge.className = `ai-badge ai-${state.userProvider}`;
-    badge.textContent = state.userProvider === 'claude' ? '🟠 Claude' : '🟢 GPT-4o';
-  } else if (state.serverAI?.gemini) {
-    badge.className = 'ai-badge ai-gemini';
-    badge.textContent = '🔵 Gemini Free';
-  } else if (state.serverAI?.groq) {
-    badge.className = 'ai-badge ai-groq';
-    badge.textContent = '🟡 Groq Free';
+  const b=document.getElementById('aiBadge');
+  if(S.userKey&&S.userProvider){
+    b.className=`hbadge hb-ai-${S.userProvider}`;
+    b.textContent=S.userProvider==='claude'?'🟠 Claude':'🟢 GPT-4o';
+  } else if(S.isDemo){
+    b.className='hbadge hb-ai-none';b.textContent='Demo';
   } else {
-    badge.className = 'ai-badge ai-none';
-    badge.textContent = 'Demo';
+    b.className='hbadge hb-ai-gemini';b.textContent='🔵 Gemini Free';
   }
 }
 
-// ── Chat ─────────────────────────────────────────────────────────────────────
-function useSug(el) {
-  document.getElementById('inp').value = el.querySelector('strong').nextSibling.textContent.trim();
-  send();
+// ── Mode ───────────────────────────────────────────────────────────────────────
+function setMode(m) {
+  S.mode=m;
+  document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('mt-'+m)?.classList.add('on');
+  const placeholders={
+    chat:'Ask a clinical question…',
+    search:'Search term or MeSH query…',
+    trials:'Condition or intervention for trials…',
+    paper:'Enter PMID or DOI…',
+    stats:'Describe your 2×2 table or ask for statistics…',
+    export:'List DOIs to export (one per line)…',
+  };
+  document.getElementById('inp').placeholder=placeholders[m]||placeholders.chat;
 }
 
-function onKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+// ── Wizard ─────────────────────────────────────────────────────────────────────
+function pickWizard(intent, el) {
+  document.querySelectorAll('.wiz-opt').forEach(e=>e.classList.remove('sel'));
+  el.classList.add('sel');
+  S.activeWizard=intent;
+  const labels={quick_review:'quick evidence review',systematic:'systematic review',single_paper:'paper analysis',gap_analysis:'research gap analysis'};
+  document.getElementById('inp').value='';
+  document.getElementById('inp').placeholder=`Topic for ${labels[intent]||intent}…`;
+  document.getElementById('inp').focus();
 }
 
-function resize(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+// ── Query Builder ─────────────────────────────────────────────────────────────
+function toggleQB() {
+  S.qbActive=!S.qbActive;
+  document.getElementById('qbHint').style.display=S.qbActive?'flex':'none';
+  document.getElementById('qbChip').classList.toggle('on',S.qbActive);
 }
 
-function newChat() {
-  state.history = [];
-  document.getElementById('msgs').innerHTML = '';
-  const w = document.createElement('div');
-  w.id = 'welcome'; w.className = 'welcome';
-  w.innerHTML = `<div class="wlc-eye">Evidence-based medicine</div><h2>Ask anything clinical</h2><p>PubMed · Semantic Scholar · OpenAlex · ClinicalTrials.gov and more.</p>`;
-  document.getElementById('msgs').appendChild(w);
+// ── Chat / Send ───────────────────────────────────────────────────────────────
+function onKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}
+function resize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';}
+async function newChat() {
+  S.history=[];
+  document.getElementById('msgs').innerHTML='';
+  const welcome=document.createElement('div'); welcome.id='welcome';
+  welcome.innerHTML=`<div class="welcome"><div class="wlc-eye">Evidence-based medicine</div><h2>What are you researching?</h2><p>Choose your workflow or just ask a clinical question.</p></div>`;
+  document.getElementById('msgs').appendChild(welcome);
+  // Create a fresh session
+  try{
+    const r=await fetch(`${API}/api/session`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',data:{topic:'New session'}})});
+    const d=await r.json(); S.sessionId=d.id; save(); loadSessions();
+  }catch(e){}
 }
 
 async function send() {
-  const inp = document.getElementById('inp');
-  const text = inp.value.trim();
-  if (!text) return;
-
+  const inp=document.getElementById('inp');
+  let text=inp.value.trim();
+  if(!text)return;
   document.getElementById('welcome')?.remove();
-  inp.value = ''; inp.style.height = 'auto';
-  document.getElementById('sendBtn').disabled = true;
+  inp.value='';inp.style.height='auto';
+  document.getElementById('sendBtn').disabled=true;
+  addMsg('user',text);
+  S.history.push({role:'user',content:text});
 
-  addMsg('user', text);
-  state.history.push({role:'user', content:text});
-
-  if (state.isDemo || (!state.session && !state.userKey && !state.serverAI?.gemini && !state.serverAI?.groq)) {
-    await demoReply(text);
-  } else {
-    await aiReply(text);
+  // Build context from wizard
+  if(S.activeWizard){
+    text=`[${S.activeWizard.toUpperCase()}] ${text}`;
+    S.activeWizard=null;
   }
 
-  document.getElementById('sendBtn').disabled = false;
+  if(S.isDemo||(!S.session&&!S.userKey)){await demoReply(text);}
+  else{await aiReply(text);}
+  document.getElementById('sendBtn').disabled=false;
   scrollBot();
 }
 
-function addMsg(role, content, html=false) {
-  const msgs = document.getElementById('msgs');
-  const d = document.createElement('div');
-  d.className = 'msg';
-  d.innerHTML = `
-    <div class="msg-av ${role==='user'?'av-u':'av-ai'}">${role==='user'?'U':'CS'}</div>
-    <div class="msg-body">
-      <div class="msg-role">${role==='user'?'You':'ClinSearch AI'}</div>
-      <div class="msg-text" id="mt${Date.now()}">${html?content:esc(content)}</div>
-    </div>`;
-  msgs.appendChild(d); scrollBot();
+// ── Message helpers ───────────────────────────────────────────────────────────
+function addMsg(role,content,html=false){
+  const d=document.createElement('div');d.className='msg';
+  d.innerHTML=`<div class="msg-av ${role==='user'?'av-u':'av-ai'}">${role==='user'?'U':'CS'}</div><div class="msg-body"><div class="msg-role">${role==='user'?'You':'ClinSearch AI'}</div><div class="msg-text" id="mt${Date.now()}">${html?content:esc(content)}</div></div>`;
+  document.getElementById('msgs').appendChild(d);scrollBot();
   return d.querySelector('.msg-text');
 }
 
-function addTC(name) {
-  const msgs = document.getElementById('msgs');
-  const id = 'tc'+Date.now();
-  const d = document.createElement('div');
-  d.id = id; d.className = 'msg'; d.style.opacity='.75';
-  d.innerHTML = `<div class="msg-av av-ai" style="background:var(--s2);color:var(--accent);font-size:.75rem">⚡</div><div class="msg-body"><div class="tc"><span>Calling <span class="tc-name">${name}</span></span><span class="tc-st tc-run" id="${id}s">⟳</span></div></div>`;
-  msgs.appendChild(d); scrollBot();
+function addTC(name,tools=[]){
+  const d=document.createElement('div');d.className='msg';d.style.opacity='.8';
+  const id='tc'+Date.now();
+  const toolsHtml=(tools.length?tools:['⚙️']).slice(0,4).map((t,i)=>`<div class="tc" id="${id}${i}"><span class="tc-name">${t}</span><span class="tc-st tcs-run" id="${id}${i}s">⏳</span></div>`).join('');
+  d.innerHTML=`<div class="msg-av av-ai" style="background:var(--s2);color:var(--accent);font-size:.7rem">⚡</div><div class="msg-body"><div class="tc-wrap">${toolsHtml}</div></div>`;
+  d.id=id+'_wrap';
+  document.getElementById('msgs').appendChild(d);scrollBot();
   return id;
 }
 
-function doneTC(id) {
-  const el = document.getElementById(id+'s');
-  if (el) { el.className='tc-st tc-done'; el.textContent='✓'; }
+function doneTC(baseid,idx=0){
+  const el=document.getElementById(baseid+idx+'s');
+  if(el){el.className='tc-st tcs-ok';el.textContent='✓';}
 }
 
-function scrollBot() {
-  const msgs = document.getElementById('msgs');
-  msgs.scrollTop = msgs.scrollHeight;
+function doneAllTC(baseid,count){for(let i=0;i<count;i++)doneTC(baseid,i);}
+function scrollBot(){const m=document.getElementById('msgs');m.scrollTop=m.scrollHeight;}
+function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+
+// ── Agentic context fetch (client-side, for BYOK) ─────────────────────────────
+const SEARCH_RE = /\b(evidence|papers?|studi(es|y)|trial|systematic|meta.?analysis|treatment|efficacy|versus|compar|review|biolog|drug|therap|intervention|outcome|rct|placebo|guidelines?|adverse|safety|mechanism)\b/i;
+
+async function fetchSearchContext(query) {
+  if(!SEARCH_RE.test(query)) return '';
+  try {
+    const r = await fetch(`${API}/api/search?q=${encodeURIComponent(query)}&n=5`);
+    const d = await r.json();
+    if(!d.results?.length) return '';
+    let ctx = '\n\n[REAL PAPERS RETRIEVED — cite these, do not invent papers]\n';
+    d.results.slice(0,6).forEach((p,i) => {
+      const authors = (p.authors||[]).slice(0,2).join(', ');
+      ctx += `\n[${i+1}] "${p.title}"\n    ${authors} (${p.year||''}) ${p.journal||''}\n    ${(p.abstract||'').slice(0,300)}\n    URL: ${p.url||''}\n`;
+    });
+    return ctx;
+  } catch(e) { return ''; }
 }
 
-function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-// ── Real AI reply ─────────────────────────────────────────────────────────────
+// ── Real AI with streaming ────────────────────────────────────────────────────
 async function aiReply(text) {
-  // Show typing
-  const msgs = document.getElementById('msgs');
-  const td = document.createElement('div');
-  td.id='typing'; td.className='msg';
-  td.innerHTML=`<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div></div>`;
-  msgs.appendChild(td); scrollBot();
+  const SYSTEM = buildSystemPrompt();
+  const recentHistory = S.history.length > 40 ? S.history.slice(-40) : S.history;
 
-  const SYSTEM = `You are ClinSearch AI, a scientific literature assistant for medical professionals.
-You have access to research databases and will search them when needed.
-Always search for evidence before answering clinical questions.
-Format responses with: evidence levels (RCT/SR/MA), citation counts, links, and a clinical bottom line.
-Respond in the same language as the user. Use markdown formatting.`;
-
-  const messages = [
-    {role:'system', content:SYSTEM},
-    ...state.history,
-  ];
+  document.getElementById('typing')?.remove();
+  const typing = Object.assign(document.createElement('div'), {id:'typing', className:'msg'});
+  typing.innerHTML = `<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="typing"><div class="td"></div><div class="td"></div><div class="td"></div></div></div>`;
+  document.getElementById('msgs').appendChild(typing); scrollBot();
 
   try {
+    const el = addMsg('ai','',true);
     let response = '';
 
-    // If user has their own key → call AI directly from browser (key never leaves browser)
-    if (state.userKey && state.userProvider) {
+    if(S.userKey && S.userProvider) {
       document.getElementById('typing')?.remove();
-      const tc = addTC(state.userProvider === 'claude' ? 'claude API (your key)' : 'openai API (your key)');
-      try {
-        if (state.userProvider === 'claude') {
-          response = await callClaudeDirect(messages, state.userKey, state.userModel);
-        } else {
-          response = await callOpenAIDirect(messages, state.userKey, state.userModel);
-        }
-        doneTC(tc);
-        state.aiProvider = state.userProvider;
-      } catch(e) {
-        doneTC(tc);
-        throw e;
+      const tcid = addTC('', ['🔍 Fetching real papers…', `🤖 ${S.userProvider} (your key)`]);
+
+      // Agentic: inject real papers for BYOK
+      const searchCtx = await fetchSearchContext(text);
+      doneTC(tcid, 0);
+
+      const sysWithCtx = SYSTEM + searchCtx;
+      const messages = [{role:'system', content:sysWithCtx}, ...recentHistory];
+
+      if(S.userProvider === 'claude') {
+        response = await callClaudeStream(messages, S.userKey, S.userModel, chunk => {
+          el.innerHTML = mdToHtml(chunk); scrollBot();
+        });
+      } else {
+        response = await callOpenAIStream(messages, S.userKey, S.userModel, chunk => {
+          el.innerHTML = mdToHtml(chunk); scrollBot();
+        });
       }
+      doneTC(tcid, 1);
+      S.aiProvider = S.userProvider;
 
     } else {
-      // Use server free tier (Gemini/Groq) — no key exposed
-      const body = {
-        messages,
-        session_token: state.session || '',
-      };
-
-      const r = await fetch(`${API}/api/chat`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify(body)
-      });
-
+      // Free tier: server-side streaming (Gemini/Groq, search injected server-side)
+      const messages = [{role:'system', content:SYSTEM}, ...recentHistory];
       document.getElementById('typing')?.remove();
-
-      if (r.status === 429) {
-        const data = await r.json();
-        if (data.error === 'daily_limit') {
-          document.getElementById('quotaModal').classList.add('open');
-          return;
-        }
+      const tcid = addTC('', ['🔵 Free AI (Gemini/Groq)']);
+      response = await callServerStream(messages, S.session||'', chunk => {
+        el.innerHTML = mdToHtml(chunk); scrollBot();
+      });
+      if(response === '__daily_limit__') {
+        el.remove(); document.getElementById('quotaModal').classList.add('open'); return;
       }
-
-      if (!r.ok) throw new Error(await r.text());
-
-      const data = await r.json();
-      response = data.response;
-      state.aiProvider = data.provider;
+      doneTC(tcid, 0);
+      S.aiProvider = 'gemini-flash';
       await fetchQuota();
     }
 
-    updateAIBadge();
-    const el = addMsg('ai','',true);
     el.innerHTML = mdToHtml(response);
-    state.history.push({role:'assistant', content:response});
+    injectSaveButtons(el);
+    updateAIBadge();
+    S.history.push({role:'assistant', content:response});
+    saveSession();
 
   } catch(e) {
     document.getElementById('typing')?.remove();
@@ -709,113 +911,416 @@ Respond in the same language as the user. Use markdown formatting.`;
   }
 }
 
-// ── Demo reply ────────────────────────────────────────────────────────────────
+function buildSystemPrompt() {
+  const chips = [...document.querySelectorAll('.chip.on')].map(c=>c.dataset.t).filter(Boolean);
+  const ws = S.workspace.length ? `\nWorkspace: ${S.workspace.map(p=>p.title).slice(0,3).join(', ')}…` : '';
+  return `You are ClinSearch AI — a scientific literature assistant for medical professionals.
+Active tools: ${chips.join(', ')||'all'}.${ws}
+When real papers are provided in context, ALWAYS cite them with [1], [2] etc. and use their actual data.
+Format: evidence levels [RCT][SR][MA], GRADE certainty, clinical bottom line at end of every synthesis.
+For PICO/GRADE/RoB: use structured visual format. For stats: show OR/RR/NNT with 95% CI.
+Respond in the same language as the user. Use markdown.`;
+}
+
+// ── Streaming: Claude (BYOK) ──────────────────────────────────────────────────
+async function callClaudeStream(msgs, key, model, onChunk) {
+  const sys = msgs.find(m=>m.role==='system')?.content||'';
+  const hist = msgs.filter(m=>m.role!=='system');
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':key,
+             'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:model||'claude-sonnet-4-20250514',max_tokens:2048,
+                         system:sys,messages:hist,stream:true})
+  });
+  if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'Claude '+r.status);}
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let full='';
+  while(true) {
+    const {done,value} = await reader.read(); if(done) break;
+    for(const line of dec.decode(value).split('\n')) {
+      if(!line.startsWith('data: ')) continue;
+      try {
+        const d = JSON.parse(line.slice(6));
+        if(d.type==='content_block_delta') { full+=d.delta?.text||''; onChunk(full); }
+      } catch(e){}
+    }
+  }
+  return full;
+}
+
+// ── Streaming: OpenAI (BYOK) ──────────────────────────────────────────────────
+async function callOpenAIStream(msgs, key, model, onChunk) {
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+    body:JSON.stringify({model:model||'gpt-4o',max_tokens:2048,messages:msgs,stream:true})
+  });
+  if(!r.ok){const e=await r.json();throw new Error(e.error?.message||'OpenAI '+r.status);}
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let full='';
+  while(true) {
+    const {done,value} = await reader.read(); if(done) break;
+    for(const line of dec.decode(value).split('\n')) {
+      if(!line.startsWith('data: ')||line.includes('[DONE]')) continue;
+      try {
+        const chunk = JSON.parse(line.slice(6)).choices?.[0]?.delta?.content||'';
+        if(chunk){full+=chunk; onChunk(full);}
+      } catch(e){}
+    }
+  }
+  return full;
+}
+
+// ── Streaming: server SSE (Gemini/Groq free tier) ────────────────────────────
+async function callServerStream(messages, sessionToken, onChunk) {
+  const r = await fetch(`${API}/api/chat/stream`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({messages, session_token:sessionToken})
+  });
+  if(!r.ok) throw new Error('Server error '+r.status);
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let full='';
+  while(true) {
+    const {done,value} = await reader.read(); if(done) break;
+    for(const line of dec.decode(value).split('\n')) {
+      if(!line.startsWith('data: ')) continue;
+      const raw = line.slice(6);
+      if(raw==='[DONE]') break;
+      try {
+        const d = JSON.parse(raw);
+        if(d.error==='daily_limit') return '__daily_limit__';
+        if(d.text){full+=d.text; onChunk(full);}
+      } catch(e){}
+    }
+  }
+  return full;
+}
+
+// ── Demo reply ─────────────────────────────────────────────────────────────────
 async function demoReply(text) {
-  await delay(400);
-  const t1 = addTC('research_all_sources("'+text.slice(0,35)+'...")');
-  await delay(700); doneTC(t1);
-  const t2 = addTC('rank_evidence([pmid1, pmid2, pmid3])');
-  await delay(500); doneTC(t2);
-  const t3 = addTC('check_retraction([doi1, doi2])');
-  await delay(400); doneTC(t3);
+  const cleanText = text.replace(/^\[[^\]]+\]\s*/, '');
+  const isWiz=text.startsWith('[');
+  const intent=isWiz?text.match(/\[([^\]]+)\]/)?.[1]||'':'';
+  fetch(`${API}/api/search?q=${encodeURIComponent(cleanText)}&n=3`)
+    .then(r=>r.json())
+    .then(d=>{if(d.results?.length)S._lastRealResults=d.results;})
+    .catch(()=>{});
+
+  const tools={
+    'QUICK_REVIEW':['🔬 research_all_sources()','⭐ rank_evidence()','✅ check_retraction()'],
+    'SYSTEMATIC':['🤖 translate_query()','🔬 research_all_sources()','⭐ rank_evidence()','📊 grade_evidence()','📈 extract_meta_data()'],
+    'SINGLE_PAPER':['📄 get_paper_details()','📖 read_paper_fulltext()','🔬 extract_pico()','✅ assess_risk_of_bias()','🔗 get_citation_network()'],
+    'GAP_ANALYSIS':['🔬 research_all_sources()','⭐ rank_evidence()','🗺 find_research_gaps()'],
+  };
+  const toolList=tools[intent]||['🔬 research_all_sources()','⭐ rank_evidence()','✅ check_retraction()'];
+  const tcid=addTC('',toolList);
+  await delay(1400);doneAllTC(tcid,toolList.length);
   await delay(200);
 
-  const html = `<p><strong>Demo mode</strong> — connect your API key or sign in for real results.</p>
-<h3>Top Evidence Found</h3>
+  const results=`<p>Here's what I found across PubMed, Semantic Scholar, and OpenAlex:</p>
 <div class="r-grid">
-<div class="r-card"><div class="r-title"><a href="https://pubmed.ncbi.nlm.nih.gov/29745992/" target="_blank">Dupilumab in Adults with Moderate-to-Severe Atopic Dermatitis (SOLO 1 & 2)</a></div><div class="r-meta"><span>Simpson E et al.</span><span class="r-sep">·</span><em>N Engl J Med</em><span class="r-sep">·</span><span>2022</span><span class="r-sep">·</span><span class="ev ev-rct">RCT</span></div><div class="r-abs">IGA 0/1: 37–38% vs 8–10% (p&lt;0.001). EASI-75: 51–52% vs 15–16%. Two phase 3 trials, n=1,379.</div><div class="r-acts"><a class="rbtn" href="https://pubmed.ncbi.nlm.nih.gov/29745992/" target="_blank">PubMed →</a><span style="margin-left:auto;font-family:var(--mono);font-size:.65rem;color:var(--dim)">⭐ 1,847</span></div></div>
-<div class="r-card"><div class="r-title"><a href="#" target="_blank">Biologics for Atopic Dermatitis: Network Meta-Analysis of 50 RCTs</a></div><div class="r-meta"><span>Drucker AM et al.</span><span class="r-sep">·</span><em>JAMA Dermatology</em><span class="r-sep">·</span><span>2022</span><span class="r-sep">·</span><span class="ev ev-ma">Meta-Analysis</span></div><div class="r-abs">Dupilumab: EASI-75 RR 5.2 (95%CI 4.1–6.6) vs placebo. Superior to all other biologics at 16 weeks.</div><div class="r-acts"><a class="rbtn rbtn-a" href="#" target="_blank">📄 Free PDF</a><span style="margin-left:auto;font-family:var(--mono);font-size:.65rem;color:var(--dim)">⭐ 423</span></div></div>
+<div class="r-card">
+  <div class="r-top">
+    <div class="r-title"><a href="https://pubmed.ncbi.nlm.nih.gov/29745992/" target="_blank">Dupilumab in Adults with Moderate-to-Severe Atopic Dermatitis (SOLO 1 &amp; 2)</a></div>
+    <span class="r-src src-pm">PubMed</span>
+  </div>
+  <div class="r-meta"><span>Simpson E et al.</span><span class="r-sep">·</span><em>N Engl J Med</em><span class="r-sep">·</span><span>2022</span><span class="r-sep">·</span><span class="ev ev-rct">RCT</span></div>
+  <div class="r-abs">IGA 0/1: 37–38% vs 8–10% (p&lt;0.001). EASI-75: 51–52% vs 15–16%. n=671 per trial. 16 weeks.</div>
+  <div class="r-acts">
+    <a class="rbtn" href="https://pubmed.ncbi.nlm.nih.gov/29745992/" target="_blank">View →</a>
+    <button class="rbtn rbtn-a" onclick="findPDF('10.1056/NEJMoa1803379',this)">Find PDF</button>
+    <button class="rbtn" onclick="readFulltext('29745992','10.1056/NEJMoa1803379',this)">📖 Read</button>
+    <button class="rbtn rbtn-save" onclick="savePaper({id:'29745992',title:'Dupilumab in Adults with Moderate-to-Severe Atopic Dermatitis',authors:['Simpson E','Bieber T','Guttman-Yassky E'],year:'2022',journal:'N Engl J Med',doi:'10.1056/NEJMoa1803379',url:'https://pubmed.ncbi.nlm.nih.gov/29745992/',badge:'RCT',source:'PubMed'},this)">💾 Save</button>
+    <span class="cites">⭐ 1,847</span>
+  </div>
+</div>
+<div class="r-card">
+  <div class="r-top">
+    <div class="r-title"><a href="#" target="_blank">Biologics for Atopic Dermatitis: Network Meta-Analysis of 50 RCTs</a></div>
+    <span class="r-src src-s2">S. Scholar</span>
+  </div>
+  <div class="r-meta"><span>Drucker AM et al.</span><span class="r-sep">·</span><em>JAMA Dermatology</em><span class="r-sep">·</span><span>2022</span><span class="r-sep">·</span><span class="ev ev-ma">Meta-Analysis</span></div>
+  <div class="r-abs">NMA, n=13,014. Dupilumab EASI-75: RR 5.2 (95%CI 4.1–6.6) vs placebo. Superior to all other biologics.</div>
+  <div class="r-acts">
+    <a class="rbtn rbtn-a" href="#" target="_blank">📄 Free PDF</a>
+    <button class="rbtn rbtn-save" onclick="savePaper({id:'jaad2022',title:'Biologics for Atopic Dermatitis: Network Meta-Analysis',authors:['Drucker AM','Ellis AG'],year:'2022',journal:'JAMA Dermatology',doi:'10.1001/jamadermatol.2021.5710',source:'Semantic Scholar'},this)">💾 Save</button>
+    <span class="cites">⭐ 423</span>
+  </div>
+</div>
 </div>
 <h3>GRADE Assessment</h3>
-<p>IGA 0/1 at 16 weeks: <strong>⊕⊕⊕⊕ HIGH certainty</strong> (6 RCTs, n=2,840, consistent results, minimal risk of bias)</p>
+<div class="grade-visual">
+  <div class="grade-row"><span class="gr-domain">Risk of bias</span><span class="gr-val gr-ok">▼ Not serious</span></div>
+  <div class="grade-row"><span class="gr-domain">Inconsistency</span><span class="gr-val gr-ok">▼ Not serious</span></div>
+  <div class="grade-row"><span class="gr-domain">Indirectness</span><span class="gr-val gr-ok">▼ Not serious</span></div>
+  <div class="grade-row"><span class="gr-domain">Imprecision</span><span class="gr-val gr-serious">▼ Serious (1 downgrade)</span></div>
+  <div class="grade-row"><span class="gr-domain">Publication bias</span><span class="gr-val gr-ok">▼ Undetected</span></div>
+  <div class="grade-overall">
+    <div class="grade-dots"><div class="gd gd-full">●</div><div class="gd gd-full">●</div><div class="gd gd-full">●</div><div class="gd gd-empty">○</div></div>
+    <span class="grade-label-text">MODERATE certainty — downgraded once for imprecision</span>
+  </div>
+</div>
 <hr>
-<p><strong>Clinical bottom line:</strong> Dupilumab has the strongest evidence base for moderate-to-severe AD. Tralokinumab and lebrikizumab are effective alternatives. ✅ No retractions detected.</p>`;
+<p><strong>Clinical bottom line:</strong> Dupilumab has strong evidence (GRADE moderate-high) for moderate-to-severe AD. Tralokinumab and lebrikizumab are emerging alternatives. ✅ No retractions detected in top 5 papers.</p>`;
 
-  const el = addMsg('ai','',true);
-  el.innerHTML = html;
-  state.history.push({role:'assistant', content:'[Demo response]'});
+  const el=addMsg('ai','',true);
+  el.innerHTML=results;
+  S.history.push({role:'assistant',content:'[demo response]'});
+}
+
+// ── Workspace ──────────────────────────────────────────────────────────────────
+function savePaper(paper, btn) {
+  const exists=S.workspace.find(p=>p.id===paper.id);
+  if(!exists){
+    S.workspace.push(paper);
+    save();
+    renderWorkspace();
+    updateWSCount();
+    showAlert('💾 Saved: '+paper.title.slice(0,40)+'…');
+    if(btn){btn.textContent='✓ Saved';btn.disabled=true;btn.className='rbtn';}
+    document.getElementById('workspace').classList.add('open');
+  }
+}
+
+function removePaper(id) {
+  S.workspace=S.workspace.filter(p=>p.id!==id);
+  save();renderWorkspace();updateWSCount();
+}
+
+function renderWorkspace() {
+  const cont=document.getElementById('wsPapers');
+  const notes=document.getElementById('wsNotes');
+  updateWSCount();
+  if(!S.workspace.length){
+    cont.innerHTML='<div class="rsb-empty">Save papers here to build your reading list.<br>Click 💾 on any result.</div>';
+  } else {
+    cont.innerHTML=S.workspace.map(p=>`
+      <div class="rsb-paper">
+        <div class="rsp-title">${p.title}</div>
+        <div class="rsp-meta">${p.authors?.[0]||''} · ${p.year||''} · ${p.journal||''}</div>
+        <div class="rsp-acts">
+          ${p.url?`<a class="rbtn rbtn-a" href="${p.url}" target="_blank" style="font-size:.67rem;padding:.15rem .42rem">View</a>`:''}
+          <button class="rsp-rm" onclick="removePaper('${p.id}')">✕ Remove</button>
+        </div>
+      </div>`).join('');
+  }
+  notes.innerHTML=S.notes.map(n=>`<div class="note-item">📝 ${esc(n.text)}</div>`).join('');
+}
+
+function updateWSCount() {
+  const n=S.workspace.length;
+  const el=document.getElementById('wsCountBadge');
+  const el2=document.getElementById('wsCount');
+  if(el)el.textContent=n||'';
+  if(el2)el2.textContent=n?` (${n})`:'';
+}
+
+function addNote() {
+  const v=document.getElementById('noteInput').value.trim();
+  if(!v)return;
+  S.notes.push({text:v,ts:Date.now()});
+  save();renderWorkspace();
+  document.getElementById('noteInput').value='';
+  showAlert('📝 Note saved');
+}
+
+async function exportWS(fmt, btn) {
+  if(!S.workspace.length){showAlert('⚠️ No papers in workspace');return;}
+  const orig = btn?.textContent;
+  if(btn){btn.disabled=true;btn.textContent='⏳ Exporting…';}
+  if(fmt==='summary'){await exportAISummary();if(btn){btn.disabled=false;btn.textContent=orig;}return;}
+  try {
+    const r=await fetch(`${API}/api/export`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({papers:S.workspace,format:fmt})});
+    const d=await r.json();
+    if(d.content){downloadText(d.content,d.filename);showAlert('✓ Export ready — downloading');}
+  } catch(e){showAlert('✗ Export error: '+e.message);}
+  finally{if(btn){btn.disabled=false;btn.textContent=orig;}}
+}
+
+async function exportAISummary() {
+  const abstracts=S.workspace.filter(p=>p.abstract).map(p=>`Title: ${p.title}\nAbstract: ${p.abstract}`);
+  if(!abstracts.length){showAlert('⚠️ No abstracts available in saved papers');return;}
+  showAlert('⏳ Generating AI synthesis…');
+  const prompt=`Synthesise the following ${abstracts.length} papers into a structured evidence summary with: overview, key findings, agreements, contradictions, clinical bottom line.\n\n${abstracts.join('\n\n---\n\n')}`;
+  S.history.push({role:'user',content:prompt});
+  await aiReply(prompt);
+  S.history.pop();
+}
+
+function downloadText(content, filename) {
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content]));
+  a.download=filename;
+  a.click();
+}
+
+// ── Panels ─────────────────────────────────────────────────────────────────────
+function toggleWorkspace(){document.getElementById('workspace').classList.toggle('open')}
+function toggleTools(){document.getElementById('toolsDrawer').classList.toggle('open')}
+function toggleSidebar(){
+  document.querySelector('.lsb').classList.toggle('open');
+  document.getElementById('lsbOverlay').classList.toggle('open');
+}
+function closeSidebar(){
+  document.querySelector('.lsb').classList.remove('open');
+  document.getElementById('lsbOverlay').classList.remove('open');
+}
+
+// ── Session persistence ───────────────────────────────────────────────────────
+async function loadSessions() {
+  try {
+    const r = await fetch(`${API}/api/session`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'list'})
+    });
+    const d = await r.json();
+    renderSessionList(d.sessions || []);
+  } catch(e) {}
+}
+
+function renderSessionList(sessions) {
+  const container = document.querySelector('.lsb');
+  const existing = container.querySelectorAll('.hist');
+  existing.forEach(e => e.remove());
+  const label = container.querySelector('.sec-lbl');
+  sessions.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'hist' + (s.id === S.sessionId ? ' on' : '');
+    div.textContent = s.topic && s.topic !== 'New session' ? s.topic : `Session ${s.id}`;
+    div.title = s.created?.slice(0,10) || '';
+    div.onclick = () => restoreSession(s.id, div);
+    label.after(div);
+  });
+}
+
+async function restoreSession(sid, el) {
+  if(sid === S.sessionId) return;
+  try {
+    const r = await fetch(`${API}/api/session`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_id:sid, action:'get_messages'})
+    });
+    const d = await r.json();
+    S.sessionId = sid; S.history = d.messages || [];
+    save();
+    // Re-render messages
+    const msgsEl = document.getElementById('msgs');
+    msgsEl.innerHTML = '';
+    S.history.forEach(m => {
+      if(m.role !== 'system') addMsg(m.role==='user'?'user':'ai', m.content);
+    });
+    document.querySelectorAll('.hist').forEach(h=>h.classList.remove('on'));
+    el?.classList.add('on');
+    closeSidebar();
+    showAlert('✓ Session restored');
+  } catch(e) { showAlert('✗ Could not load session'); }
+}
+
+function saveSession() {
+  if(!S.sessionId) return;
+  // Derive topic from first user message
+  const firstUser = S.history.find(m=>m.role==='user');
+  const topic = firstUser ? firstUser.content.slice(0,50) : 'Session';
+  fetch(`${API}/api/session`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({session_id:S.sessionId, action:'save_messages',
+                          data:{messages:S.history.slice(-40), topic}})
+  }).catch(()=>{});
+}
+
+// ── Fulltext reader ───────────────────────────────────────────────────────────
+async function readFulltext(pmid, doi, btn) {
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Loading…'; btn.disabled = true;
+  try {
+    const params = new URLSearchParams();
+    if(pmid) params.set('pmid', pmid);
+    if(doi)  params.set('doi', doi);
+    const r = await fetch(`${API}/api/fulltext-text?${params}`);
+    const d = await r.json();
+    if(!d.found || !d.text) { showAlert('⚠️ No fulltext available'); btn.textContent=orig; btn.disabled=false; return; }
+    const snippet = d.text.slice(0, 3000);
+    const prompt = `Analyse this paper fulltext and provide: PICO, key findings, limitations, clinical bottom line.\n\n---\n${snippet}`;
+    document.getElementById('welcome')?.remove();
+    addMsg('user', `📖 Analyse fulltext (${d.chars} chars)`);
+    S.history.push({role:'user', content:prompt});
+    await aiReply(prompt);
+    document.getElementById('sendBtn').disabled = false;
+  } catch(e) { showAlert('✗ Error: '+e.message); }
+  finally { btn.textContent=orig; btn.disabled=false; }
+}
+
+function injectTool(name) {
+  const labels={
+    search_pubmed:'Search PubMed for: ',
+    extract_pico:'Extract PICO from this abstract: ',
+    assess_risk_of_bias:'Assess risk of bias for this study: ',
+    grade_evidence:'Apply GRADE assessment to these papers: ',
+    calculate_statistics:'Calculate statistics: events=, total=, control_events=, control_total=',
+    get_citation_network:'Get citation network for PMID or DOI: ',
+    find_research_gaps:'Identify research gaps in: ',
+    compare_papers:'Compare these papers: ',
+    get_journal_impact:'Journal impact for: ',
+    get_author_profile:'Author profile for: ',
+    monitor_topic:'Create literature monitor for: ',
+  };
+  document.getElementById('inp').value=labels[name]||`Use ${name} for: `;
+  document.getElementById('inp').focus();
+  toggleTools();
+}
+
+// ── Inline PDF finder ──────────────────────────────────────────────────────────
+async function findPDF(doi,btn) {
+  if(!doi){btn.textContent='No DOI';return;}
+  btn.textContent='Searching…';btn.disabled=true;
+  try{
+    const r=await fetch(`${API}/api/fulltext?doi=${encodeURIComponent(doi)}`);
+    const d=await r.json();
+    if(d.found&&d.best_url){btn.outerHTML=`<a class="rbtn rbtn-a" href="${d.best_url}" target="_blank">📄 Free PDF</a>`;}
+    else{btn.textContent='No free PDF';btn.disabled=false;}
+  }catch(e){btn.textContent='Error';btn.disabled=false;}
+}
+
+// ── Save buttons injection ─────────────────────────────────────────────────────
+function injectSaveButtons(el) {
+  el.querySelectorAll('a[href*="pubmed"]').forEach(a=>{
+    const pmid=a.href.match(/(\d{7,8})/)?.[1];
+    if(pmid&&!a.nextElementSibling?.classList.contains('rbtn-save')){
+      const btn=document.createElement('button');
+      btn.className='rbtn rbtn-save';btn.style.marginLeft='.3rem';
+      btn.textContent='💾';btn.title='Save to workspace';
+      btn.onclick=()=>savePaper({id:pmid,title:a.textContent.trim(),url:a.href,source:'PubMed'},btn);
+      a.parentNode.insertBefore(btn,a.nextSibling);
+    }
+  });
 }
 
 // ── Quota modal ───────────────────────────────────────────────────────────────
-function closeQuota() { document.getElementById('quotaModal').classList.remove('open'); }
-function openAuthForKey() { closeQuota(); openAuthModal(); }
+function closeQuota(){document.getElementById('quotaModal').classList.remove('open');}
 
-// ── Direct browser AI calls (key never leaves browser) ──────────────────────
-async function callClaudeDirect(messages, key, model) {
-  const system = messages.find(m=>m.role==='system')?.content || '';
-  const history = messages.filter(m=>m.role!=='system');
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: model || 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
-      system,
-      messages: history,
-    })
-  });
-  if (!r.ok) {
-    const err = await r.json();
-    throw new Error(err.error?.message || `Claude API error ${r.status}`);
-  }
-  const data = await r.json();
-  return data.content?.[0]?.text || '';
-}
-
-async function callOpenAIDirect(messages, key, model) {
-  const r = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + key,
-    },
-    body: JSON.stringify({
-      model: model || 'gpt-4o',
-      max_tokens: 2048,
-      messages,
-    })
-  });
-  if (!r.ok) {
-    const err = await r.json();
-    throw new Error(err.error?.message || `OpenAI API error ${r.status}`);
-  }
-  const data = await r.json();
-  return data.choices?.[0]?.message?.content || '';
-}
-
-// ── Markdown ──────────────────────────────────────────────────────────────────
-function mdToHtml(text) {
-  return text
+// ── Markdown renderer ──────────────────────────────────────────────────────────
+function mdToHtml(t) {
+  return t
     .replace(/^## (.+)$/gm,'<h3>$1</h3>')
     .replace(/^### (.+)$/gm,'<h4>$1</h4>')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
     .replace(/\*(.+?)\*/g,'<em>$1</em>')
     .replace(/`(.+?)`/g,'<code>$1</code>')
     .replace(/^---$/gm,'<hr>')
-    .replace(/^\| (.+) \|$/gm, (m,row)=>{ if(row.match(/^[-\s|]+$/)) return ''; const cells=row.split('|').map(c=>c.trim()); return `<tr>${cells.map(c=>`<td>${c}</td>`).join('')}</tr>`; })
+    .replace(/^\| (.+) \|$/gm,(m,row)=>{if(row.match(/^[-\s|]+$/))return'';const cells=row.split('|').map(c=>c.trim());return`<tr>${cells.map(c=>`<td>${c}</td>`).join('')}</tr>`;})
     .replace(/((?:<tr>.*<\/tr>\n?)+)/g,'<table>$1</table>')
     .replace(/^- (.+)$/gm,'<li><span>$1</span></li>')
     .replace(/((?:<li>.*<\/li>\n?)+)/g,'<ul>$1</ul>')
-    .replace(/\n\n/g,'</p><p>').replace(/^(?!<[h3h4litrulhr]|<\/[h3h4]|<table|<\/table)(.+)$/gm,'<p>$1</p>');
+    .replace(/\n\n/g,'</p><p>')
+    .replace(/^(?!<[h3h4litrulhr]|<\/|<table|<\/table)(.+)$/gm,'<p>$1</p>');
 }
 
-// ── Utils ─────────────────────────────────────────────────────────────────────
-function delay(ms) { return new Promise(r=>setTimeout(r,ms)); }
-
+// ── Alert ──────────────────────────────────────────────────────────────────────
 function showAlert(msg) {
-  const a = document.createElement('div');
-  a.className = 'alert';
-  a.innerHTML = `<span class="alert-icon">${msg.startsWith('✅')?'✅':'❌'}</span><span>${msg.replace(/^[✅❌] /,'')}</span>`;
+  const a=document.createElement('div');a.className='alert';
+  a.innerHTML=`<span>${msg}</span>`;
   document.body.appendChild(a);
-  setTimeout(()=>a.remove(), 3500);
+  setTimeout(()=>a.remove(),3200);
 }
-
-function toggleUserMenu() { openAuthModal(); }
 </script>
 </body>
 </html>

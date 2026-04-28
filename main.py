@@ -1,10 +1,15 @@
 """
-ClinSearch v2 — Backend API
+ClinSearch v3 — Backend API
 AI: Gemini 2.0 Flash (free) → Groq (free fallback) → User key (Claude/OpenAI)
 Auth: Google OAuth
 Research: PubMed, Semantic Scholar, OpenAlex, ClinicalTrials, Unpaywall
 """
 
+import sqlite3
+import logging
+import re
+logger = logging.getLogger("clinsearch")
+import time
 from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -17,13 +22,18 @@ from google.auth.transport import requests as google_requests
 import jwt, secrets
 from datetime import datetime, timedelta
 
-app = FastAPI(title="ClinSearch API v2", version="2.0.0")
+app = FastAPI(title="ClinSearch API v3", version="3.0.0")
+
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("FRONTEND_URL", "http://localhost:3000").split(",")]
+ALLOWED_ORIGINS += ["http://localhost:3000", "http://localhost:5500", "http://127.0.0.1:3000", "null"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"file://.*",
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 # ── Environment ───────────────────────────────────────────────────────────────
@@ -43,9 +53,42 @@ S2_API_KEY     = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
 
 TIMEOUT = 20
 
-# Simple in-memory quota tracker (use Redis in production)
-_quotas: dict = {}  # user_id -> {count, date}
-FREE_DAILY_LIMIT = 20  # queries per day
+FREE_DAILY_LIMIT = 20
+_DB_PATH = "/tmp/clinsearch.db"
+
+def _init_db():
+    conn = sqlite3.connect(_DB_PATH)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS quotas (
+            user_id TEXT PRIMARY KEY,
+            count INTEGER DEFAULT 0,
+            date TEXT
+        );
+        CREATE TABLE IF NOT EXISTS sessions (
+            id TEXT PRIMARY KEY,
+            topic TEXT,
+            papers TEXT DEFAULT '[]',
+            notes TEXT DEFAULT '[]',
+            messages TEXT DEFAULT '[]',
+            created TEXT
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+_init_db()
+
+def _migrate_db():
+    conn = sqlite3.connect(_DB_PATH)
+    for col, default in [("messages", "[]"), ("updated", "''")]:
+        try:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} TEXT DEFAULT '{default}'")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+    conn.close()
+
+_migrate_db()
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -69,7 +112,7 @@ class SearchRequest(BaseModel):
 async def health():
     return {
         "status": "ok",
-        "version": "2.0.0",
+        "version": "3.0.0",
         "ai": {
             "gemini": bool(GEMINI_API_KEY),
             "groq":   bool(GROQ_API_KEY),
@@ -99,7 +142,6 @@ async def google_login():
 async def google_callback(code: str):
     """Exchange code for tokens, return JWT session."""
     async with httpx.AsyncClient(timeout=15) as client:
-        # Exchange code for tokens
         r = await client.post(
             "https://oauth2.googleapis.com/token",
             data={
@@ -111,16 +153,13 @@ async def google_callback(code: str):
             }
         )
         tokens = r.json()
-        id_token_str = tokens.get("id_token", "")
 
-        # Get user info
         r2 = await client.get(
             "https://www.googleapis.com/oauth2/v3/userinfo",
             headers={"Authorization": f"Bearer {tokens.get('access_token','')}"}
         )
         user = r2.json()
 
-    # Issue JWT session token
     payload = {
         "sub":   user.get("sub", ""),
         "email": user.get("email", ""),
@@ -130,7 +169,6 @@ async def google_callback(code: str):
     }
     session_token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
-    # Redirect to frontend with token
     return RedirectResponse(
         f"{FRONTEND_URL}/auth/callback?token={session_token}&name={user.get('name','')}&email={user.get('email','')}"
     )
@@ -165,35 +203,41 @@ def get_user(token: str) -> Optional[dict]:
 
 def check_quota(user_id: str) -> bool:
     today = datetime.utcnow().date().isoformat()
-    rec = _quotas.get(user_id, {"count": 0, "date": today})
-    if rec["date"] != today:
-        rec = {"count": 0, "date": today}
-    if rec["count"] >= FREE_DAILY_LIMIT:
+    conn = sqlite3.connect(_DB_PATH)
+    row = conn.execute("SELECT count, date FROM quotas WHERE user_id=?", (user_id,)).fetchone()
+    if not row or row[1] != today:
+        conn.execute("INSERT OR REPLACE INTO quotas VALUES (?,1,?)", (user_id, today))
+        conn.commit(); conn.close()
+        return True
+    if row[0] >= FREE_DAILY_LIMIT:
+        conn.close()
         return False
-    rec["count"] += 1
-    _quotas[user_id] = rec
+    conn.execute("UPDATE quotas SET count=count+1 WHERE user_id=?", (user_id,))
+    conn.commit(); conn.close()
     return True
 
 
 # ── AI Chat ───────────────────────────────────────────────────────────────────
+_ip_requests: dict = {}
+
 @app.post("/api/chat")
-async def chat(req: ChatRequest):
-    """
-    Route AI request:
-    1. If user provided their own key → use it (no quota)
-    2. Else try Gemini free tier
-    3. Fallback to Groq free tier
-    4. If all fail → ask user for key
-    """
-    # Check session & quota for free tier
+async def chat(req: ChatRequest, request: Request):
+    # Basic IP rate limit: 60 req/min per IP
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    window = _ip_requests.get(client_ip, [])
+    window = [t for t in window if now - t < 60]
+    if len(window) >= 60:
+        raise HTTPException(429, "Too many requests. Please wait a minute.")
+    window.append(now)
+    _ip_requests[client_ip] = window
+
     user_id = "anonymous"
     if req.session_token:
         user = get_user(req.session_token)
         if user:
             user_id = user.get("sub", "anonymous")
 
-    # Free tier only — user keys are called directly from browser
-    # Check quota
     if not check_quota(user_id):
         return JSONResponse(
             status_code=429,
@@ -204,24 +248,66 @@ async def chat(req: ChatRequest):
             }
         )
 
-    # Try Gemini (free)
+    # Agentic: inject real papers into context before calling AI
+    messages = await _inject_search_context(req.messages)
+
     if GEMINI_API_KEY:
         try:
-            response = await call_gemini(req.messages, GEMINI_API_KEY)
+            response = await call_gemini(messages, GEMINI_API_KEY)
             return {"response": response, "provider": "gemini-flash", "quota_used": True}
         except Exception as e:
             if "quota" not in str(e).lower() and "rate" not in str(e).lower():
                 raise HTTPException(500, f"Gemini error: {e}")
 
-    # Fallback: Groq (free)
     if GROQ_API_KEY:
         try:
-            response = await call_groq(req.messages, GROQ_API_KEY)
+            response = await call_groq(messages, GROQ_API_KEY)
             return {"response": response, "provider": "groq-llama", "quota_used": True}
         except Exception as e:
             raise HTTPException(500, f"Groq error: {e}")
 
     raise HTTPException(503, "No AI provider available. Please add your API key.")
+
+
+_SEARCH_KEYWORDS = re.compile(
+    r'\b(evidence|papers?|studi(es|y)|trial|systematic|meta.?analysis|treatment|efficacy|'
+    r'versus|compar|review|biolog|drug|therap|intervention|outcome|rct|placebo|'
+    r'guidelines?|recommend|adverse|safety|dose|mechanism)\b', re.I
+)
+
+async def _inject_search_context(messages: list) -> list:
+    last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+    if not _SEARCH_KEYWORDS.search(last_user):
+        return messages
+    try:
+        results = await asyncio.gather(
+            _pubmed_search(last_user, 4),
+            _s2_search(last_user, 3),
+            return_exceptions=True
+        )
+        papers = []
+        for r in results:
+            if isinstance(r, list):
+                papers.extend(r)
+        if not papers:
+            return messages
+        context = "\n\n[REAL PAPERS RETRIEVED — cite these in your response, do not invent papers]\n"
+        for i, p in enumerate(papers[:6], 1):
+            authors = ", ".join((p.get("authors") or [])[:2])
+            context += (f"\n[{i}] \"{p['title']}\"\n"
+                       f"    Authors: {authors} | Year: {p.get('year','')} | Journal: {p.get('journal','')}\n"
+                       f"    Abstract: {(p.get('abstract') or '')[:350]}\n"
+                       f"    URL: {p.get('url','')}\n")
+        enriched = []
+        for m in messages:
+            if m["role"] == "system":
+                enriched.append({**m, "content": m["content"] + context})
+            else:
+                enriched.append(m)
+        return enriched
+    except Exception as e:
+        logger.warning(f"Agentic search inject error: {e}")
+        return messages
 
 
 async def call_gemini(messages: list, key: str) -> str:
@@ -260,9 +346,6 @@ async def call_groq(messages: list, key: str) -> str:
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
-
-
-# User AI calls happen directly in the browser — no server involvement
 
 
 # ── Research tools (REST endpoints) ──────────────────────────────────────────
@@ -372,12 +455,14 @@ async def get_quota(token: Optional[str] = None):
         user = get_user(token)
         if user: user_id = user.get("sub", "anonymous")
     today = datetime.utcnow().date().isoformat()
-    rec = _quotas.get(user_id, {"count": 0, "date": today})
-    if rec["date"] != today: rec = {"count": 0, "date": today}
-    return {"used": rec["count"], "limit": FREE_DAILY_LIMIT, "remaining": max(0, FREE_DAILY_LIMIT - rec["count"])}
+    conn = sqlite3.connect(_DB_PATH)
+    row = conn.execute("SELECT count, date FROM quotas WHERE user_id=?", (user_id,)).fetchone()
+    conn.close()
+    used = row[0] if row and row[1] == today else 0
+    return {"used": used, "limit": FREE_DAILY_LIMIT, "remaining": max(0, FREE_DAILY_LIMIT - used)}
 
 
-# ── Internal search helpers ──────────────────────────────────────────────────
+# ── Internal search helpers ───────────────────────────────────────────────────
 async def _pubmed_search(q, n=5, year_from=None, free_only=False):
     query = q
     if year_from: query += f" AND {year_from}:3000[dp]"
@@ -417,7 +502,8 @@ async def _pubmed_search(q, n=5, year_from=None, free_only=False):
                            "abstract":abstract,"doi":doi,"pmid":pmid,"badge":badge,
                            "url":f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/","source":"PubMed"})
         return results
-    except Exception:
+    except Exception as e:
+        logger.warning(f"PubMed search error: {e}")
         return []
 
 
@@ -438,7 +524,8 @@ async def _s2_search(q, n=5, year_from=None, oa_only=False):
                  "abstract":(p.get("abstract") or "")[:500],"doi":(p.get("externalIds") or {}).get("DOI",""),
                  "citations":p.get("citationCount",0),"pdf_url":(p.get("openAccessPdf") or {}).get("url",""),
                  "source":"Semantic Scholar"} for p in papers]
-    except Exception:
+    except Exception as e:
+        logger.warning(f"S2 search error: {e}")
         return []
 
 
@@ -465,5 +552,417 @@ async def _openalex_search(q, n=5, year_from=None, oa_only=False, study_type=Non
                  "abstract":reconstruct(w.get("abstract_inverted_index")),"doi":(w.get("doi","") or "").replace("https://doi.org/",""),
                  "citations":w.get("cited_by_count",0),"pdf_url":(w.get("open_access") or {}).get("oa_url",""),
                  "source":"OpenAlex"} for w in works]
-    except Exception:
+    except Exception as e:
+        logger.warning(f"OpenAlex search error: {e}")
         return []
+
+
+# ───────────────────────────────────────
+# RESEARCH SESSION — context accumulation
+# ───────────────────────────────────────
+
+import uuid
+
+class SessionRequest(BaseModel):
+    session_id: Optional[str] = None
+    action: str  # 'create' | 'get' | 'save_paper' | 'remove_paper' | 'add_note' | 'clear'
+    data: Optional[dict] = None
+
+@app.post("/api/session")
+async def session_manager(req: SessionRequest):
+    """Persistent research session — workspace for papers and notes."""
+    if req.action == "create":
+        sid = str(uuid.uuid4())[:8]
+        topic = req.data.get("topic","") if req.data else ""
+        created = datetime.utcnow().isoformat()
+        conn = sqlite3.connect(_DB_PATH)
+        conn.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?)", (sid, topic, "[]", "[]", "[]", created))
+        conn.commit(); conn.close()
+        return {"id": sid, "topic": topic, "papers": [], "notes": [], "created": created}
+
+    if req.action == "get":
+        conn = sqlite3.connect(_DB_PATH)
+        row = conn.execute("SELECT * FROM sessions WHERE id=?", (req.session_id,)).fetchone()
+        conn.close()
+        if not row: return {"error": "Session not found"}
+        return {"id":row[0],"topic":row[1],"papers":json.loads(row[2]),"notes":json.loads(row[3]),"created":row[4]}
+
+    if req.action == "save_paper":
+        conn = sqlite3.connect(_DB_PATH)
+        row = conn.execute("SELECT papers FROM sessions WHERE id=?", (req.session_id,)).fetchone()
+        if not row: conn.close(); return {"error": "Session not found"}
+        papers = json.loads(row[0])
+        paper = req.data or {}
+        if paper.get("id") not in [p.get("id") for p in papers]:
+            papers.append(paper)
+            conn.execute("UPDATE sessions SET papers=? WHERE id=?", (json.dumps(papers), req.session_id))
+            conn.commit()
+        conn.close()
+        return {"saved": True, "total": len(papers)}
+
+    if req.action == "remove_paper":
+        pid = (req.data or {}).get("id")
+        conn = sqlite3.connect(_DB_PATH)
+        row = conn.execute("SELECT papers FROM sessions WHERE id=?", (req.session_id,)).fetchone()
+        if row:
+            papers = [p for p in json.loads(row[0]) if p.get("id") != pid]
+            conn.execute("UPDATE sessions SET papers=? WHERE id=?", (json.dumps(papers), req.session_id))
+            conn.commit()
+        conn.close()
+        return {"removed": True}
+
+    if req.action == "add_note":
+        conn = sqlite3.connect(_DB_PATH)
+        row = conn.execute("SELECT notes FROM sessions WHERE id=?", (req.session_id,)).fetchone()
+        if row:
+            notes = json.loads(row[0])
+            notes.append({"text": (req.data or {}).get("text",""), "timestamp": datetime.utcnow().isoformat()})
+            conn.execute("UPDATE sessions SET notes=? WHERE id=?", (json.dumps(notes), req.session_id))
+            conn.commit()
+        conn.close()
+        return {"saved": True}
+
+    if req.action == "clear":
+        conn = sqlite3.connect(_DB_PATH)
+        conn.execute("UPDATE sessions SET papers='[]', notes='[]' WHERE id=?", (req.session_id,))
+        conn.commit(); conn.close()
+        return {"cleared": True}
+
+    if req.action == "list":
+        conn = sqlite3.connect(_DB_PATH)
+        rows = conn.execute(
+            "SELECT id, topic, created FROM sessions ORDER BY created DESC LIMIT 30"
+        ).fetchall()
+        conn.close()
+        return {"sessions": [{"id": r[0], "topic": r[1] or "Untitled", "created": r[2]} for r in rows]}
+
+    if req.action == "save_messages":
+        msgs = (req.data or {}).get("messages", [])
+        topic = (req.data or {}).get("topic", "")
+        conn = sqlite3.connect(_DB_PATH)
+        if topic:
+            conn.execute("UPDATE sessions SET messages=?, topic=? WHERE id=?",
+                        (json.dumps(msgs), topic, req.session_id))
+        else:
+            conn.execute("UPDATE sessions SET messages=? WHERE id=?",
+                        (json.dumps(msgs), req.session_id))
+        conn.commit(); conn.close()
+        return {"saved": True}
+
+    if req.action == "get_messages":
+        conn = sqlite3.connect(_DB_PATH)
+        row = conn.execute("SELECT messages, topic FROM sessions WHERE id=?", (req.session_id,)).fetchone()
+        conn.close()
+        if not row: return {"messages": [], "topic": ""}
+        return {"messages": json.loads(row[0] or "[]"), "topic": row[1] or ""}
+
+    return {"error": "Unknown action"}
+
+
+# ───────────────────────────────────────
+# SMART QUERY BUILDER
+# ───────────────────────────────────────
+
+class QueryBuildRequest(BaseModel):
+    question: str
+    session_token: Optional[str] = None
+
+@app.post("/api/build-query")
+async def build_query(req: QueryBuildRequest):
+    """Convert natural language clinical question to optimised PubMed query."""
+    prompt = f"""Convert this clinical question to an optimised PubMed search query.
+Return JSON only with these fields:
+- "pubmed_simple": basic PubMed query
+- "pubmed_advanced": full MeSH query with Boolean operators
+- "mesh_terms": list of relevant MeSH terms
+- "suggested_filters": list of filter suggestions
+- "search_strategy": brief explanation
+
+Question: {req.question}"""
+
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        if GEMINI_API_KEY:
+            raw = await call_gemini(messages, GEMINI_API_KEY)
+        elif GROQ_API_KEY:
+            raw = await call_groq(messages, GROQ_API_KEY)
+        else:
+            return {"error": "No AI provider available"}
+
+        import json as _json
+        match = re.search(r'\{[\s\S]+\}', raw)
+        if match:
+            return _json.loads(match.group())
+        return {"pubmed_simple": req.question, "error": "Could not parse"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ───────────────────────────────────────
+# WIZARD — guided research flow
+# ───────────────────────────────────────
+
+class WizardRequest(BaseModel):
+    intent: str  # 'quick_review' | 'systematic' | 'single_paper' | 'trials' | 'gap_analysis'
+    query: str
+    session_token: Optional[str] = None
+
+@app.post("/api/wizard")
+async def wizard(req: WizardRequest):
+    """Return recommended tool sequence for the research intent."""
+    flows = {
+        "quick_review": {
+            "label": "Quick Evidence Review",
+            "steps": ["search_all_sources","rank_evidence","check_retraction","summarize"],
+            "description": "Best evidence on a topic in 2 minutes",
+            "sources": ["pubmed","semantic_scholar","openalex"],
+        },
+        "systematic": {
+            "label": "Systematic Review Support",
+            "steps": ["build_query","search_all_sources","search_trials","rank_evidence","extract_pico","grade","export_ris","export_csv"],
+            "description": "Full systematic review workflow with PRISMA support",
+            "sources": ["pubmed","semantic_scholar","openalex","europe_pmc","cochrane"],
+        },
+        "single_paper": {
+            "label": "Paper Deep Dive",
+            "steps": ["get_details","read_fulltext","extract_pico","assess_rob","find_related","citation_network"],
+            "description": "Complete analysis of a single article",
+            "sources": ["pubmed","pmc","unpaywall"],
+        },
+        "trials": {
+            "label": "Clinical Trials Search",
+            "steps": ["search_trials","search_preprints","check_results"],
+            "description": "Ongoing and completed clinical trials",
+            "sources": ["clinicaltrials","pubmed","biorxiv"],
+        },
+        "gap_analysis": {
+            "label": "Research Gap Analysis",
+            "steps": ["search_all_sources","rank_evidence","find_gaps","suggest_designs"],
+            "description": "Identify unexplored areas and research opportunities",
+            "sources": ["pubmed","semantic_scholar","openalex","arxiv"],
+        },
+    }
+    flow = flows.get(req.intent, flows["quick_review"])
+    return {"intent": req.intent, "query": req.query, "flow": flow}
+
+
+# ───────────────────────────────────────
+# EXPORT WORKSPACE
+# ───────────────────────────────────────
+
+class ExportRequest(BaseModel):
+    papers: List[dict]
+    format: str = "ris"  # 'ris' | 'csv' | 'vancouver' | 'apa' | 'summary'
+    session_token: Optional[str] = None
+
+@app.post("/api/export")
+async def export_papers(req: ExportRequest):
+    """Export a list of papers in various formats."""
+    papers = req.papers
+
+    if req.format == "ris":
+        lines = []
+        for p in papers:
+            doi = p.get("doi","")
+            lines.append("TY  - JOUR")
+            for a in (p.get("authors") or [])[:6]:
+                lines.append(f"AU  - {a}")
+            lines.append(f"TI  - {p.get('title','')}")
+            lines.append(f"JO  - {p.get('journal','')}")
+            lines.append(f"PY  - {p.get('year','')}")
+            if doi: lines.append(f"DO  - {doi}")
+            if doi: lines.append(f"UR  - https://doi.org/{doi}")
+            lines.append("ER  - ")
+            lines.append("")
+        return {"content": "\n".join(lines), "filename": "references.ris", "mimetype": "application/x-research-info-systems"}
+
+    if req.format == "csv":
+        import csv, io
+        buf = io.StringIO()
+        w = csv.DictWriter(buf, fieldnames=["title","authors","year","journal","doi","url","citations","source"])
+        w.writeheader()
+        for p in papers:
+            w.writerow({
+                "title": p.get("title",""), "year": p.get("year",""),
+                "journal": p.get("journal",""), "doi": p.get("doi",""),
+                "authors": "; ".join(p.get("authors") or []),
+                "url": p.get("url",""), "citations": p.get("citations",""),
+                "source": p.get("source",""),
+            })
+        return {"content": buf.getvalue(), "filename": "references.csv", "mimetype": "text/csv"}
+
+    if req.format in ("vancouver","apa"):
+        refs = []
+        for i, p in enumerate(papers, 1):
+            authors = p.get("authors") or []
+            author_str = ", ".join(authors[:6]) + (" et al" if len(authors) > 6 else "")
+            doi = p.get("doi","")
+            if req.format == "vancouver":
+                ref = f"{i}. {author_str}. {p.get('title','')}. {p.get('journal','')}. {p.get('year','')}."
+                if doi: ref += f" doi:{doi}"
+            else:
+                ref = f"{author_str} ({p.get('year','')}). {p.get('title','')}. {p.get('journal','')}."
+                if doi: ref += f" https://doi.org/{doi}"
+            refs.append(ref)
+        return {"content": "\n\n".join(refs), "filename": "bibliography.txt", "mimetype": "text/plain"}
+
+    return {"error": "Unknown format"}
+
+
+# ── Fulltext text extraction ──────────────────────────────────────────────────
+@app.get("/api/fulltext-text")
+async def fulltext_text(pmid: Optional[str] = None, doi: Optional[str] = None):
+    """Extract readable text from PMC (via PMID) or Unpaywall OA HTML."""
+    text = ""
+
+    if pmid:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                # Convert PMID → PMCID
+                conv = await client.get(
+                    "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/",
+                    params={"ids": pmid, "format": "json", "email": PUBMED_EMAIL}
+                )
+                pmcid = ((conv.json().get("records") or [{}])[0]).get("pmcid", "").replace("PMC", "")
+                if pmcid:
+                    r = await client.get(
+                        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+                        params={"db": "pmc", "id": pmcid, "rettype": "full", "retmode": "xml",
+                                "email": PUBMED_EMAIL}
+                    )
+                    if r.status_code == 200:
+                        root = ET.fromstring(r.text)
+                        paragraphs = [
+                            (p.text or "").strip()
+                            for p in root.findall(".//p")
+                            if p.text and len(p.text.strip()) > 40
+                        ]
+                        text = " ".join(paragraphs)[:6000]
+        except Exception as e:
+            logger.warning(f"PMC fulltext error: {e}")
+
+    if not text and doi:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                r = await client.get(
+                    f"https://api.unpaywall.org/v2/{doi.lstrip('https://doi.org/')}",
+                    params={"email": PUBMED_EMAIL}
+                )
+                if r.status_code == 200:
+                    best = (r.json().get("best_oa_location") or {})
+                    url = best.get("url_for_landing_page") or best.get("url", "")
+                    if url and not url.endswith(".pdf"):
+                        r2 = await client.get(url, follow_redirects=True, timeout=10,
+                                              headers={"User-Agent": "Mozilla/5.0"})
+                        if r2.status_code == 200 and "html" in r2.headers.get("content-type", ""):
+                            html = re.sub(r'<script[^>]*>.*?</script>', '', r2.text, flags=re.DOTALL)
+                            html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
+                            html = re.sub(r'<[^>]+>', ' ', html)
+                            text = re.sub(r'\s+', ' ', html).strip()[:6000]
+        except Exception as e:
+            logger.warning(f"Fulltext HTML fetch error: {e}")
+
+    return {"text": text, "chars": len(text), "found": bool(text)}
+
+
+# ── Streaming chat (SSE) ──────────────────────────────────────────────────────
+from fastapi.responses import StreamingResponse as _StreamingResponse
+
+@app.post("/api/chat/stream")
+async def chat_stream(req: ChatRequest, request: Request):
+    """SSE streaming endpoint for free-tier AI (Gemini / Groq)."""
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    window = _ip_requests.get(client_ip, [])
+    window = [t for t in window if now - t < 60]
+    if len(window) >= 60:
+        raise HTTPException(429, "Too many requests.")
+    window.append(now)
+    _ip_requests[client_ip] = window
+
+    user_id = "anonymous"
+    if req.session_token:
+        user = get_user(req.session_token)
+        if user:
+            user_id = user.get("sub", "anonymous")
+
+    if not check_quota(user_id):
+        async def quota_err():
+            yield f"data: {json.dumps({'error': 'daily_limit'})}\n\n"
+        return _StreamingResponse(quota_err(), media_type="text/event-stream")
+
+    messages = await _inject_search_context(req.messages)
+
+    async def generate():
+        if GEMINI_API_KEY:
+            try:
+                async for chunk in _stream_gemini(messages, GEMINI_API_KEY):
+                    yield f"data: {json.dumps({'text': chunk, 'provider': 'gemini-flash'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+            except Exception as e:
+                logger.warning(f"Gemini stream error: {e}")
+
+        if GROQ_API_KEY:
+            try:
+                async for chunk in _stream_groq(messages, GROQ_API_KEY):
+                    yield f"data: {json.dumps({'text': chunk, 'provider': 'groq-llama'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+            except Exception as e:
+                logger.warning(f"Groq stream error: {e}")
+
+        yield f"data: {json.dumps({'error': 'No AI provider available'})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return _StreamingResponse(generate(), media_type="text/event-stream",
+                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+async def _stream_gemini(messages: list, key: str):
+    system = next((m["content"] for m in messages if m["role"] == "system"), "")
+    history = [m for m in messages if m["role"] != "system"]
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream(
+            "POST",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?key={key}&alt=sse",
+            json={
+                "system_instruction": {"parts": [{"text": system}]} if system else None,
+                "contents": [
+                    {"role": "model" if m["role"] == "assistant" else "user",
+                     "parts": [{"text": m["content"]}]}
+                    for m in history
+                ],
+                "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.3}
+            }
+        ) as r:
+            async for line in r.aiter_lines():
+                if line.startswith("data: "):
+                    try:
+                        data = json.loads(line[6:])
+                        chunk = (data.get("candidates", [{}])[0]
+                                 .get("content", {}).get("parts", [{}])[0].get("text", ""))
+                        if chunk:
+                            yield chunk
+                    except Exception:
+                        pass
+
+
+async def _stream_groq(messages: list, key: str):
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream(
+            "POST",
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": "llama-3.3-70b-versatile", "messages": messages,
+                  "max_tokens": 2048, "temperature": 0.3, "stream": True}
+        ) as r:
+            async for line in r.aiter_lines():
+                if line.startswith("data: ") and "[DONE]" not in line:
+                    try:
+                        data = json.loads(line[6:])
+                        chunk = data.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                        if chunk:
+                            yield chunk
+                    except Exception:
+                        pass
