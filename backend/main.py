@@ -25,15 +25,13 @@ from datetime import datetime, timedelta
 app = FastAPI(title="ClinSearch API v3", version="3.0.0")
 
 ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("FRONTEND_URL", "http://localhost:3000").split(",")]
-ALLOWED_ORIGINS += ["http://localhost:3000", "http://localhost:5500", "http://127.0.0.1:3000", "null"]
+ALLOWED_ORIGINS += ["http://localhost:3000", "http://localhost:5500", "http://127.0.0.1:3000"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"file://.*",
     allow_methods=["*"],
     allow_headers=["*"],
-    allow_credentials=True,
 )
 
 # ── Environment ───────────────────────────────────────────────────────────────
