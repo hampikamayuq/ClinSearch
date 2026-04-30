@@ -794,7 +794,7 @@ async function send() {
     S.activeWizard=null;
   }
 
-  if(S.isDemo||(!S.session&&!S.userKey)){await demoReply(text);}
+  if(S.isDemo){await demoReply(text);}
   else{await aiReply(text);}
   document.getElementById('sendBtn').disabled=false;
   scrollBot();
