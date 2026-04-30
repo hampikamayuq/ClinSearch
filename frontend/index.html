@@ -972,27 +972,43 @@ async function callOpenAIStream(msgs, key, model, onChunk) {
 
 // ── Streaming: server SSE (Gemini/Groq free tier) ────────────────────────────
 async function callServerStream(messages, sessionToken, onChunk) {
-  const r = await fetch(`${API}/api/chat/stream`, {
+  // Try SSE streaming first; fall back to regular POST if stream yields nothing
+  try {
+    const r = await fetch(`${API}/api/chat/stream`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({messages, session_token:sessionToken})
+    });
+    if(r.ok) {
+      const reader = r.body.getReader(); const dec = new TextDecoder(); let full='';
+      while(true) {
+        const {done,value} = await reader.read(); if(done) break;
+        for(const line of dec.decode(value).split('\n')) {
+          if(!line.startsWith('data: ')) continue;
+          const raw = line.slice(6);
+          if(raw==='[DONE]') break;
+          try {
+            const d = JSON.parse(raw);
+            if(d.error==='daily_limit') return '__daily_limit__';
+            if(d.text){full+=d.text; onChunk(full);}
+          } catch(e){}
+        }
+      }
+      if(full) return full;
+    }
+  } catch(e){}
+  // Fallback: non-streaming /api/chat
+  const r2 = await fetch(`${API}/api/chat`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({messages, session_token:sessionToken})
   });
-  if(!r.ok) throw new Error('Server error '+r.status);
-  const reader = r.body.getReader(); const dec = new TextDecoder(); let full='';
-  while(true) {
-    const {done,value} = await reader.read(); if(done) break;
-    for(const line of dec.decode(value).split('\n')) {
-      if(!line.startsWith('data: ')) continue;
-      const raw = line.slice(6);
-      if(raw==='[DONE]') break;
-      try {
-        const d = JSON.parse(raw);
-        if(d.error==='daily_limit') return '__daily_limit__';
-        if(d.text){full+=d.text; onChunk(full);}
-      } catch(e){}
-    }
-  }
-  return full;
+  if(!r2.ok) throw new Error('Server error '+r2.status);
+  const data = await r2.json();
+  if(data.error==='daily_limit') return '__daily_limit__';
+  if(data.error) throw new Error(data.message||data.error);
+  onChunk(data.response);
+  return data.response;
 }
 
 // ── Demo reply ─────────────────────────────────────────────────────────────────
