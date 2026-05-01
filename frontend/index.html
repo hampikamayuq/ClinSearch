@@ -1482,8 +1482,8 @@ async function callServerStream(messages, sessionToken, onChunk) {
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({messages, session_token:sessionToken})
   });
-  if(!r2.ok) throw new Error('Server error '+r2.status);
   const data = await r2.json();
+  if(!r2.ok) throw new Error(data.message||data.detail||data.error||('Server error '+r2.status));
   if(data.error==='daily_limit') return '__daily_limit__';
   if(data.error) throw new Error(data.message||data.error);
   onChunk(data.response);
@@ -1984,7 +1984,8 @@ async function runAITool(tool, params, targetEl) {
       body:JSON.stringify({tool, session_token:S.session||'', ...params})
     });
     const d=await r.json();
-    if(d.error) throw new Error(d.error);
+    if(!r.ok) throw new Error(d.message||d.detail||d.error||('Server error '+r.status));
+    if(d.error) throw new Error(d.message||d.error);
     if(tool==='forest_plot' && d.data?.studies?.length) {
       const wrap=document.createElement('div');wrap.className='forest-wrap';
       targetEl.innerHTML='';targetEl.appendChild(wrap);

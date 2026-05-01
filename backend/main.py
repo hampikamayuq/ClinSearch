@@ -234,6 +234,28 @@ def check_quota(user_id: str) -> bool:
     return True
 
 
+def ai_provider_error_response(provider: str, exc: Exception):
+    status = getattr(getattr(exc, "response", None), "status_code", None)
+    text = str(exc)
+    if status == 429 or "429" in text or "Too Many Requests" in text:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "provider_rate_limit",
+                "message": "The free AI provider is rate-limited right now. Try again in a few minutes or use your own API key.",
+                "provider": provider,
+            },
+        )
+    return JSONResponse(
+        status_code=502,
+        content={
+            "error": "provider_error",
+            "message": f"{provider} error: {text}",
+            "provider": provider,
+        },
+    )
+
+
 # ── AI Chat ───────────────────────────────────────────────────────────────────
 _ip_requests: dict = {}
 
@@ -281,7 +303,7 @@ async def chat(req: ChatRequest, request: Request):
             response = await call_groq(messages, GROQ_API_KEY)
             return {"response": response, "provider": "groq-llama", "quota_used": True}
         except Exception as e:
-            raise HTTPException(500, f"Groq error: {e}")
+            return ai_provider_error_response("groq", e)
 
     raise HTTPException(503, "No AI provider available. Please add your API key.")
 
@@ -2489,7 +2511,10 @@ Assess ALL {len(papers)} papers. Return only the JSON array."""
             except Exception:
                 raw = None
         if not raw and GROQ_API_KEY:
-            raw = await call_groq(messages, GROQ_API_KEY)
+            try:
+                raw = await call_groq(messages, GROQ_API_KEY)
+            except Exception as e:
+                return ai_provider_error_response("groq", e)
         if not raw:
             raise HTTPException(503, "No AI provider available")
 
