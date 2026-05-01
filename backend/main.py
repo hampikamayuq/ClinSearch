@@ -965,3 +965,284 @@ async def _stream_groq(messages: list, key: str):
                             yield chunk
                     except Exception:
                         pass
+
+
+# ── Retraction Check ──────────────────────────────────────────────────────────
+@app.get("/api/retraction")
+async def check_retraction(doi: str = "", pmid: str = ""):
+    """Check if a paper has been retracted via CrossRef and PubMed."""
+    retracted = False
+    reason = ""
+    source = ""
+
+    if doi:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(
+                    f"https://api.crossref.org/works/{doi.lstrip('https://doi.org/')}",
+                    headers={"User-Agent": f"ClinSearch/3.0 (mailto:{PUBMED_EMAIL})"}
+                )
+                if r.status_code == 200:
+                    data = r.json().get("message", {})
+                    updates = data.get("update-to", []) or []
+                    for upd in updates:
+                        if "retract" in upd.get("type", "").lower():
+                            retracted = True
+                            reason = "Retraction notice found in CrossRef"
+                            source = "CrossRef"
+                            break
+                    if not retracted and "retract" in str(data.get("title", "")).lower():
+                        retracted = True
+                        reason = "Title indicates retraction"
+                        source = "CrossRef"
+        except Exception as e:
+            logger.warning(f"CrossRef retraction check error: {e}")
+
+    if not retracted and pmid:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(
+                    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+                    params={"db": "pubmed", "id": pmid, "rettype": "xml",
+                            "retmode": "xml", "email": PUBMED_EMAIL}
+                )
+                if r.status_code == 200:
+                    xml = r.text
+                    if "RetractionOf" in xml or "RetractionIn" in xml or "retract" in xml.lower()[:2000]:
+                        retracted = True
+                        reason = "Retraction notice found in PubMed record"
+                        source = "PubMed"
+        except Exception as e:
+            logger.warning(f"PubMed retraction check error: {e}")
+
+    return {"retracted": retracted, "reason": reason, "source": source,
+            "doi": doi, "pmid": pmid}
+
+
+# ── AI-Powered Tools ──────────────────────────────────────────────────────────
+class AIToolRequest(BaseModel):
+    tool: str           # 'journal_club' | 'gap_analysis' | 'head_to_head' | 'patient_summary' | 'forest_plot'
+    pmid: Optional[str] = None
+    doi: Optional[str] = None
+    papers: Optional[List[dict]] = None
+    query: Optional[str] = None
+    session_token: Optional[str] = None
+
+
+@app.post("/api/ai-tool")
+async def ai_tool(req: AIToolRequest):
+    """Run a specialised AI tool: journal club, gap analysis, head-to-head, patient summary."""
+
+    if req.tool == "journal_club":
+        paper_text = ""
+        if req.pmid or req.doi:
+            try:
+                async with httpx.AsyncClient(timeout=15) as client:
+                    qid = req.pmid or req.doi
+                    db_param = "pubmed"
+                    r = await client.get(
+                        "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi",
+                        params={"db": db_param, "id": qid, "rettype": "abstract",
+                                "retmode": "text", "email": PUBMED_EMAIL}
+                    )
+                    paper_text = r.text[:3000] if r.status_code == 200 else ""
+            except Exception:
+                pass
+
+        prompt = f"""You are a senior clinician running a journal club.
+
+{'Paper content:\n' + paper_text if paper_text else 'Query: ' + (req.query or '')}
+
+Generate a complete journal club presentation with these sections:
+## 1. Background & Clinical Question
+## 2. PICO Framework
+- P (Population):
+- I (Intervention):
+- C (Comparison):
+- O (Outcome):
+## 3. Methods Summary
+- Study design, N, randomisation, blinding, follow-up
+## 4. Key Results (with exact numbers)
+- Primary endpoint: [effect size, 95% CI, p-value, NNT/NNH]
+- Secondary endpoints
+- Subgroup analyses
+## 5. Critical Appraisal
+- Risk of bias (CONSORT/STROBE criteria)
+- Internal validity concerns
+- External validity / generalisability
+## 6. GRADE Certainty: ⊕⊕⊕⊕/⊕⊕⊕◯/⊕⊕◯◯/⊕◯◯◯
+## 7. Clinical Bottom Line
+- Does this change practice?
+- For which patients?
+## 8. Discussion Questions (5 questions for the group)
+
+Be rigorous, cite specific numbers from the paper."""
+
+    elif req.tool == "gap_analysis":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:12], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:400]}"
+        prompt = f"""You are an expert researcher analyzing the evidence landscape for: {req.query or 'the provided papers'}
+
+Papers analyzed:{papers_ctx}
+
+Identify the most important RESEARCH GAPS with this structure:
+
+## 🗺 Evidence Map
+Brief overview of what IS known (2-3 sentences).
+
+## 🔍 Critical Research Gaps
+For each gap, provide:
+### Gap [N]: [Title]
+- **What's missing**: specific description
+- **Why it matters clinically**: patient impact
+- **Current best evidence**: what we have instead
+- **Suggested study design**: RCT/SR/cohort, estimated N, endpoints
+- **Priority**: 🔴 High / 🟡 Medium / 🟢 Low
+
+## 📊 Evidence Quality by Subgroup
+Table: Population | Evidence Quality | Key Gap
+
+## 💡 Most Fundable Research Questions
+Top 3 specific, answerable research questions with rationale.
+
+## ⚠️ Risks of Acting on Current Evidence
+What could go wrong if clinicians rely on existing data."""
+
+    elif req.tool == "head_to_head":
+        papers_ctx = ""
+        treatments = set()
+        if req.papers:
+            for i, p in enumerate(req.papers[:10], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:500]}"
+                treatments.add(p.get('title', '')[:40])
+
+        prompt = f"""You are a systematic reviewer comparing treatments for: {req.query or 'the provided topic'}
+
+Evidence base:{papers_ctx}
+
+Create a comprehensive HEAD-TO-HEAD comparison:
+
+## Treatments Compared
+List all interventions identified.
+
+## Evidence Matrix
+| Outcome | Treatment A | Treatment B | Treatment C | Winner |
+|---------|------------|------------|------------|--------|
+| Primary efficacy | [OR/RR, CI] | ... | ... | ... |
+| Mortality | | | | |
+| Major adverse events | | | | |
+| Discontinuation rate | | | | |
+| Quality of life | | | | |
+| Cost-effectiveness | | | | |
+
+## Network of Evidence
+- Direct comparisons available: [list]
+- Indirect comparisons only: [list]
+- No data: [list]
+
+## Subgroup Differences
+Who benefits most from each treatment?
+
+## Clinical Decision Framework
+```
+If [patient profile A] → prefer [Treatment X] because [evidence]
+If [patient profile B] → prefer [Treatment Y] because [evidence]
+If [contraindication Z] → avoid [Treatment] because [evidence]
+```
+
+## Confidence in Conclusions
+GRADE rating for each comparison with justification."""
+
+    elif req.tool == "patient_summary":
+        paper = (req.papers or [{}])[0]
+        title = paper.get("title", req.query or "")
+        abstract = paper.get("abstract", "")[:1000]
+        prompt = f"""Convert this medical research into a clear patient-friendly summary.
+
+Paper: {title}
+Abstract: {abstract}
+
+Write a patient summary with:
+## What this study is about
+(2-3 simple sentences, no medical jargon)
+
+## What the researchers did
+(Simple description of how the study worked)
+
+## What they found
+(Key results in plain language — use "X out of 100 patients" instead of percentages or OR)
+
+## What this means for you
+(Practical takeaway — should patients ask their doctor about this?)
+
+## Questions to ask your doctor
+(3-5 specific questions based on these findings)
+
+## Important limitations
+(Why this might not apply to everyone, in simple terms)
+
+Use analogies, avoid jargon, write at 8th-grade reading level. Respond in the same language as the paper title."""
+
+    elif req.tool == "forest_plot":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:10], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:500]}"
+        prompt = f"""Extract forest plot data from these papers for: {req.query or 'the primary outcome'}
+
+Papers:{papers_ctx}
+
+Return a JSON object with this EXACT structure (no markdown, just JSON):
+{{
+  "outcome": "outcome name",
+  "measure": "OR|RR|HR|MD",
+  "unit": "unit if continuous",
+  "studies": [
+    {{
+      "author": "First author name",
+      "year": 2023,
+      "n_treatment": 150,
+      "n_control": 148,
+      "effect": 0.65,
+      "ci_lower": 0.45,
+      "ci_upper": 0.95,
+      "weight": 15.2,
+      "events_treatment": 12,
+      "events_control": 18
+    }}
+  ],
+  "pooled": {{
+    "effect": 0.72,
+    "ci_lower": 0.58,
+    "ci_upper": 0.89,
+    "i2": 23,
+    "p_heterogeneity": 0.24,
+    "p_value": 0.003
+  }}
+}}
+If exact data is not available, estimate from the abstract. Ensure effect and CIs are numeric."""
+    else:
+        raise HTTPException(400, "Unknown tool")
+
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        if GEMINI_API_KEY:
+            raw = await call_gemini(messages, GEMINI_API_KEY)
+        elif GROQ_API_KEY:
+            raw = await call_groq(messages, GROQ_API_KEY)
+        else:
+            raise HTTPException(503, "No AI provider")
+
+        if req.tool == "forest_plot":
+            try:
+                match = re.search(r'\{[\s\S]+\}', raw)
+                data = json.loads(match.group()) if match else {}
+                return {"tool": req.tool, "data": data, "raw": raw}
+            except Exception:
+                return {"tool": req.tool, "data": {}, "raw": raw}
+
+        return {"tool": req.tool, "result": raw}
+    except Exception as e:
+        raise HTTPException(500, str(e))

@@ -200,6 +200,30 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 
 /* Stats visual */
 .stats-visual{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.55rem 0}
+/* OA / Retraction badges */
+.badge-oa{display:inline-block;font-size:.6rem;font-weight:700;padding:.1rem .38rem;border-radius:3px;background:rgba(62,207,142,.15);color:var(--green);border:1px solid rgba(62,207,142,.3);letter-spacing:.03em;flex-shrink:0}
+.badge-ret{display:inline-block;font-size:.6rem;font-weight:700;padding:.1rem .38rem;border-radius:3px;background:rgba(255,80,80,.15);color:#ff5050;border:1px solid rgba(255,80,80,.3);letter-spacing:.03em;flex-shrink:0}
+/* Tool result panel */
+.tool-panel{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:1rem 1.2rem;margin:.5rem 0 .5rem 2.8rem}
+.tool-panel h3{font-family:var(--serif);font-size:1rem;margin-bottom:.6rem;color:var(--text)}
+.tool-panel-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem}
+/* NNT Calculator */
+.nnt-wrap{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:.7rem}
+.nnt-field label{display:block;font-size:.7rem;color:var(--muted);margin-bottom:.22rem}
+.nnt-field input{width:100%;background:var(--bg);border:1px solid var(--b2);border-radius:6px;padding:.38rem .6rem;color:var(--text);font-size:.82rem;font-family:var(--mono)}
+.nnt-field input:focus{outline:none;border-color:var(--accent)}
+.nnt-result{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;text-align:center;margin-top:.7rem}
+.nnt-stat{background:var(--s2);border-radius:8px;padding:.6rem .4rem}
+.nnt-stat .val{font-size:1.5rem;font-weight:700;color:var(--accent)}
+.nnt-stat .lbl{font-size:.65rem;color:var(--muted);margin-top:.2rem}
+/* Forest plot */
+.forest-wrap{overflow-x:auto;margin:.5rem 0}
+.forest-wrap svg text{font-family:var(--mono)}
+/* Search action bar */
+.srch-actions{display:flex;gap:.5rem;flex-wrap:wrap;margin:.4rem 0 .6rem 2.8rem}
+.act-btn{font-size:.74rem;padding:.32rem .7rem;border-radius:6px;border:1px solid var(--b2);background:var(--s1);color:var(--text);cursor:pointer;display:flex;align-items:center;gap:.3rem;transition:all .12s;font-family:var(--sans)}
+.act-btn:hover{border-color:var(--accent);color:var(--accent)}
+.act-btn.loading{opacity:.6;pointer-events:none}
 @media(max-width:480px){.stats-visual{grid-template-columns:repeat(2,1fr)}}
 .stat-box{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.6rem;text-align:center}
 .stat-val{font-family:var(--mono);font-size:1.25rem;margin-bottom:.12rem}
@@ -469,6 +493,20 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
               <div class="wo-desc">Find unexplored areas in a field</div>
             </div>
           </div>
+        </div>
+        <!-- NNT Quick Calculator -->
+        <div style="margin:1rem 0 0;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.9rem 1rem">
+          <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
+            <span style="font-size:.85rem;font-weight:600">🧮 NNT / NNH Calculator</span>
+            <span style="font-size:.68rem;color:var(--muted)">Absolute risk reduction & number needed to treat</span>
+          </div>
+          <div class="nnt-wrap">
+            <div class="nnt-field"><label>Control event rate (%)</label><input type="number" id="nntCER" step="0.1" min="0" max="100" placeholder="e.g. 20" oninput="calcNNT()"></div>
+            <div class="nnt-field"><label>Relative Risk Reduction (%)</label><input type="number" id="nntRRR" step="0.1" min="0" max="100" placeholder="e.g. 25" oninput="calcNNT()"></div>
+            <div class="nnt-field"><label>OR / RR (if no RRR)</label><input type="number" id="nntOR" step="0.01" min="0" placeholder="e.g. 0.75" oninput="calcNNT()"></div>
+            <div class="nnt-field"><label>95% CI lower bound</label><input type="number" id="nntCIL" step="0.01" placeholder="e.g. 0.60" oninput="calcNNT()"></div>
+          </div>
+          <div id="nntResult" style="font-size:.78rem;color:var(--muted)">Enter control event rate + RRR <em>or</em> OR/RR to calculate.</div>
         </div>
       </div>
     </div>
@@ -823,11 +861,21 @@ async function searchMode(query) {
     S._lastRealResults=papers;
     S.history.push({role:'user',content:query});
 
-    // Header
+    // Header + action bar
     const hdr=document.createElement('div');
-    hdr.style.cssText='margin:.4rem 0 .3rem 2.8rem;display:flex;align-items:center;gap:.6rem';
+    hdr.style.cssText='margin:.4rem 0 .2rem 2.8rem;display:flex;align-items:center;gap:.6rem';
     hdr.innerHTML=`<span style="font-size:.75rem;color:var(--muted);font-family:var(--mono)">📄 <strong style="color:var(--text)">${papers.length} papers</strong> found across PubMed · S2 · OpenAlex</span>`;
     document.getElementById('msgs').appendChild(hdr);
+    // Action buttons
+    const actBar=document.createElement('div');actBar.className='srch-actions';
+    const _q=query,_p=papers;
+    actBar.innerHTML=`
+      <button class="act-btn" onclick="showGapAnalysis(window._srchPapers,window._srchQuery)">🗺 Research Gaps</button>
+      <button class="act-btn" onclick="showHeadToHead(window._srchPapers,window._srchQuery)">⚖️ Head-to-Head</button>
+      <button class="act-btn" onclick="showForestPlot(window._srchPapers,window._srchQuery)">🌲 Forest Plot</button>
+    `;
+    window._srchPapers=papers; window._srchQuery=query;
+    document.getElementById('msgs').appendChild(actBar);
 
     // Paper cards
     const srcLabel={pubmed:'PubMed',semantic_scholar:'S2',openalex:'OA'};
@@ -839,15 +887,19 @@ async function searchMode(query) {
       const src=p.source||'';const pmid=p.pmid||p.id||'';const doi=p.doi||'';
       const url=p.url||(pmid?`https://pubmed.ncbi.nlm.nih.gov/${pmid}/`:'#');
       const evType=p.pub_type||(p.title?.match(/meta.?anal/i)?'MA':p.title?.match(/\bsystematic\b/i)?'SR':p.title?.match(/\bRCT\b|\brandomiz/i)?'RCT':'');
-      return`<div class="r-card">
+      const isOA=p.open_access||p.isOpenAccess||p.oa_url||false;
+      const cardId='card'+Math.random().toString(36).slice(2);
+      const pJson=JSON.stringify(p).replace(/'/g,"\\'");
+      return`<div class="r-card" id="${cardId}">
         <div class="r-top">
           <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
-          <div style="display:flex;gap:.3rem;flex-shrink:0">
+          <div style="display:flex;gap:.3rem;flex-shrink:0;align-items:center">
+            ${isOA?'<span class="badge-oa">OA</span>':''}
             ${evType?`<span class="ev ev-${evType.toLowerCase()}">${evType}</span>`:''}
             ${src?`<span class="r-src ${srcClass[src]||''}">${srcLabel[src]||src}</span>`:''}
           </div>
         </div>
-        <div class="r-meta">
+        <div class="r-meta" id="${cardId}meta">
           ${authors?`<span>${esc(authors)}</span>`:''}
           ${p.year?`<span class="r-sep">·</span><span>${p.year}</span>`:''}
           ${p.journal?`<span class="r-sep">·</span><em>${esc(p.journal)}</em>`:''}
@@ -857,12 +909,26 @@ async function searchMode(query) {
         <div class="r-acts">
           <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
           ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
-          <button class="rbtn rbtn-save" onclick='saveToWorkspace(${JSON.stringify(p)})'>💾 Save</button>
+          <button class="rbtn rbtn-save" onclick='saveToWorkspace(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'  >💾 Save</button>
           ${pmid?`<button class="rbtn" onclick="readFulltext('${pmid}','${doi}','${esc(p.title||'')}')">📖 Read</button>`:''}
+          <button class="rbtn" onclick='showJournalClub("${pmid}","${doi}","${esc(p.title||'')}")'>📋 Journal Club</button>
+          <button class="rbtn" onclick='showPatientSummary(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>👤 Patient</button>
         </div>
       </div>`;
     }).join('')}</div>`;
     document.getElementById('msgs').appendChild(cardsDiv);scrollBot();
+
+    // Async retraction check for each paper (non-blocking)
+    papers.forEach(p=>{
+      if(p.doi||p.pmid) {
+        const cardId=cardsDiv.querySelector(`[id^="card"]`);
+        // find meta element by searching for the paper title
+        const cards=[...cardsDiv.querySelectorAll('.r-card')];
+        const card=cards.find(c=>c.querySelector('.r-title a')?.textContent?.slice(0,30)===p.title?.slice(0,30));
+        const metaEl=card?.querySelector('.r-meta');
+        if(metaEl) checkRetraction(p.doi||'',p.pmid||'',metaEl);
+      }
+    });
 
     // AI synthesis
     const synWrap=document.createElement('div');synWrap.className='msg';
@@ -1501,6 +1567,149 @@ async function renderPaperCards(query, afterEl) {
     if(afterEl) afterEl.after(container);
     else document.getElementById('msgs').appendChild(container);
   } catch(e) {}
+}
+
+// ── NNT Calculator ────────────────────────────────────────────────────────────
+function calcNNT() {
+  const cer  = parseFloat(document.getElementById('nntCER')?.value) / 100;
+  const rrr  = parseFloat(document.getElementById('nntRRR')?.value) / 100;
+  const orv  = parseFloat(document.getElementById('nntOR')?.value);
+  const cil  = parseFloat(document.getElementById('nntCIL')?.value);
+  const el   = document.getElementById('nntResult');
+  if(!el) return;
+  let arr, nnt, eer, nntLow, nntHigh;
+  if(!isNaN(cer) && cer > 0 && !isNaN(rrr) && rrr > 0) {
+    eer = cer * (1 - rrr); arr = cer - eer; nnt = Math.ceil(1 / arr);
+    if(!isNaN(cil)) { const errHigh = cer * cil; const arrLow = cer - errHigh; nntHigh = Math.ceil(1/arrLow); }
+  } else if(!isNaN(cer) && cer > 0 && !isNaN(orv) && orv > 0) {
+    const rr = orv / ((1 - cer) + cer * orv);
+    eer = cer * rr; arr = cer - eer; nnt = Math.ceil(1 / Math.abs(arr));
+    if(!isNaN(cil)) { const rrLow = cil / ((1-cer)+cer*cil); const eerH=cer*rrLow; const arrL=cer-eerH; nntHigh=Math.ceil(1/Math.abs(arrL)); }
+  }
+  if(!nnt || !isFinite(nnt)) { el.innerHTML='<span style="color:var(--muted)">Enter control event rate + RRR <em>or</em> OR/RR to calculate.</span>'; return; }
+  const benefit = arr > 0;
+  const ciStr = nntHigh ? ` (95% CI ${Math.min(nnt,nntHigh)}–${Math.max(nnt,nntHigh)})` : '';
+  el.innerHTML=`<div class="nnt-result">
+    <div class="nnt-stat"><div class="val">${nnt}</div><div class="lbl">${benefit?'NNT':'NNH'}${ciStr}</div></div>
+    <div class="nnt-stat"><div class="val">${(Math.abs(arr)*100).toFixed(1)}%</div><div class="lbl">ARR (absolute risk reduction)</div></div>
+    <div class="nnt-stat"><div class="val">${(eer*100).toFixed(1)}%</div><div class="lbl">Treated event rate (EER)</div></div>
+  </div>
+  <p style="margin-top:.5rem;font-size:.75rem;color:var(--muted)">${benefit?`Treat <strong style="color:var(--text)">${nnt} patients</strong> with this intervention to prevent 1 additional event. Per 100 treated: ${Math.round(arr*100)} benefit.`:`<span style="color:#ff5050">Harm:</span> 1 extra adverse event per ${nnt} patients treated.`}</p>`;
+}
+
+// ── Forest Plot SVG Renderer ──────────────────────────────────────────────────
+function renderForestPlot(data, container) {
+  if(!data?.studies?.length) { container.innerHTML='<p style="color:var(--muted)">No data to plot.</p>'; return; }
+  const { studies, pooled, outcome='Outcome', measure='OR' } = data;
+  const allVals = studies.flatMap(s=>[s.ci_lower,s.ci_upper]).filter(v=>!isNaN(v));
+  if(pooled) allVals.push(pooled.ci_lower, pooled.ci_upper);
+  const minX = Math.min(...allVals) * 0.85, maxX = Math.max(...allVals) * 1.15;
+  const W=680, L=190, R=110, PW=W-L-R;
+  const H = 38 + studies.length*30 + (pooled?60:20);
+  const xScale = v => L + (v-minX)/(maxX-minX)*PW;
+  const nullX = xScale(measure==='MD'?0:1);
+  const BG='var(--bg)', TEXT='var(--text)', MUT='var(--muted)', ACC='var(--accent)', B1='var(--b1)';
+  let s=`<svg width="100%" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="font-family:monospace;font-size:10px;max-width:${W}px">`;
+  s+=`<text x="4" y="14" font-size="10" font-weight="bold" fill="${TEXT}">Study</text>`;
+  s+=`<text x="${L+PW/2}" y="14" text-anchor="middle" font-size="10" font-weight="bold" fill="${TEXT}">${outcome} [${measure}]</text>`;
+  s+=`<text x="${W-4}" y="14" text-anchor="end" font-size="10" font-weight="bold" fill="${TEXT}">Weight%</text>`;
+  s+=`<line x1="${nullX}" y1="18" x2="${nullX}" y2="${H-35}" stroke="${MUT}" stroke-dasharray="3,3" stroke-width="1"/>`;
+  studies.forEach((st,i)=>{
+    const y=28+i*30, xe=xScale(st.effect||1), xl=xScale(st.ci_lower||0.5), xh=xScale(st.ci_upper||2);
+    const bx=Math.max(4,Math.min(9,(st.weight||10)/4));
+    s+=`<text x="4" y="${y+4}" font-size="9.5" fill="${TEXT}">${esc(String(st.author||'?'))} ${st.year||''}</text>`;
+    s+=`<line x1="${xl}" y1="${y}" x2="${xh}" y2="${y}" stroke="${TEXT}" stroke-width="1.5"/>`;
+    s+=`<line x1="${xl}" y1="${y-4}" x2="${xl}" y2="${y+4}" stroke="${TEXT}" stroke-width="1.5"/>`;
+    s+=`<line x1="${xh}" y1="${y-4}" x2="${xh}" y2="${y+4}" stroke="${TEXT}" stroke-width="1.5"/>`;
+    s+=`<rect x="${xe-bx/2}" y="${y-bx/2}" width="${bx}" height="${bx}" fill="${ACC}"/>`;
+    s+=`<text x="${W-4}" y="${y+4}" text-anchor="end" font-size="9" fill="${MUT}">${(st.weight||0).toFixed(1)}</text>`;
+    s+=`<text x="${L+PW+4}" y="${y+4}" font-size="9" fill="${MUT}">${(st.effect||0).toFixed(2)} [${(st.ci_lower||0).toFixed(2)}–${(st.ci_upper||0).toFixed(2)}]</text>`;
+  });
+  if(pooled) {
+    const y=28+studies.length*30+12, xe=xScale(pooled.effect||1), xl=xScale(pooled.ci_lower||0.5), xh=xScale(pooled.ci_upper||2);
+    s+=`<line x1="${L}" y1="${y-14}" x2="${W-R}" y2="${y-14}" stroke="${B1}" stroke-width="1"/>`;
+    s+=`<polygon points="${xl},${y} ${xe},${y-10} ${xh},${y} ${xe},${y+10}" fill="${ACC}" opacity="0.85"/>`;
+    s+=`<text x="4" y="${y+4}" font-size="9.5" font-weight="bold" fill="${TEXT}">Pooled (I²=${pooled.i2||'?'}%)</text>`;
+    s+=`<text x="${W-4}" y="${y+4}" text-anchor="end" font-size="9" fill="${ACC}">${(pooled.effect||0).toFixed(2)} [${(pooled.ci_lower||0).toFixed(2)}–${(pooled.ci_upper||0).toFixed(2)}] p=${pooled.p_value||'?'}</text>`;
+    const scaleY=y+28;
+    [[minX,L],[measure==='MD'?0:1,nullX],[maxX,W-R]].forEach(([v,x])=>{
+      s+=`<text x="${x}" y="${scaleY}" text-anchor="middle" font-size="8.5" fill="${MUT}">${v.toFixed(2)}</text>`;
+    });
+    s+=`<text x="${L+PW*0.25}" y="${scaleY+12}" text-anchor="middle" font-size="8" fill="${MUT}">← Favors control</text>`;
+    s+=`<text x="${L+PW*0.75}" y="${scaleY+12}" text-anchor="middle" font-size="8" fill="${MUT}">Favors treatment →</text>`;
+  }
+  s+='</svg>';
+  container.innerHTML=s;
+}
+
+// ── AI Tool Runner ────────────────────────────────────────────────────────────
+async function runAITool(tool, params, targetEl) {
+  if(!targetEl) return;
+  targetEl.innerHTML=`<div style="color:var(--muted);font-size:.82rem">⚡ Running ${tool.replace('_',' ')}…</div>`;
+  try {
+    const r=await fetch(`${API}/api/ai-tool`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({tool, session_token:S.session||'', ...params})
+    });
+    const d=await r.json();
+    if(d.error) throw new Error(d.error);
+    if(tool==='forest_plot' && d.data?.studies?.length) {
+      const wrap=document.createElement('div');wrap.className='forest-wrap';
+      targetEl.innerHTML='';targetEl.appendChild(wrap);
+      renderForestPlot(d.data,wrap);
+      if(d.data.pooled) {
+        const p=d.data.pooled;
+        targetEl.insertAdjacentHTML('beforeend',`<div style="margin-top:.5rem;font-size:.78rem;color:var(--muted)">Pooled ${d.data.measure}: <strong style="color:var(--accent)">${p.effect?.toFixed(2)}</strong> [${p.ci_lower?.toFixed(2)}–${p.ci_upper?.toFixed(2)}] · I²=${p.i2}% · p=${p.p_value}</div>`);
+      }
+    } else {
+      targetEl.innerHTML=mdToHtml(d.result||d.raw||'No result');
+      injectSaveButtons(targetEl);
+    }
+  } catch(e) { targetEl.innerHTML=`<span style="color:#ff5050">⚠️ ${e.message}</span>`; }
+}
+
+function addToolPanel(title, afterEl) {
+  const panel=document.createElement('div');panel.className='tool-panel';
+  panel.innerHTML=`<div class="tool-panel-hdr"><strong>${title}</strong></div><div class="tool-result"></div>`;
+  if(afterEl) afterEl.after(panel); else document.getElementById('msgs').appendChild(panel);
+  return panel.querySelector('.tool-result');
+}
+
+async function showJournalClub(pmid,doi,title) {
+  const resultEl=addToolPanel(`📋 Journal Club — ${title.slice(0,50)}…`);
+  await runAITool('journal_club',{pmid,doi,query:title},resultEl);
+}
+
+async function showPatientSummary(paper) {
+  const resultEl=addToolPanel(`👤 Patient Summary — ${(paper.title||'').slice(0,50)}…`);
+  await runAITool('patient_summary',{papers:[paper]},resultEl);
+}
+
+async function showGapAnalysis(papers, query) {
+  const resultEl=addToolPanel(`🗺 Research Gap Analysis — "${query}"`);
+  await runAITool('gap_analysis',{papers,query},resultEl);
+}
+
+async function showHeadToHead(papers, query) {
+  const resultEl=addToolPanel(`⚖️ Head-to-Head Comparison — "${query}"`);
+  await runAITool('head_to_head',{papers,query},resultEl);
+}
+
+async function showForestPlot(papers, query) {
+  const resultEl=addToolPanel(`🌲 Forest Plot — "${query}"`);
+  await runAITool('forest_plot',{papers,query},resultEl);
+}
+
+// ── Retraction check (async, updates card badge) ──────────────────────────────
+async function checkRetraction(doi, pmid, badgeEl) {
+  if(!doi && !pmid) return;
+  try {
+    const r=await fetch(`${API}/api/retraction?doi=${encodeURIComponent(doi||'')}&pmid=${encodeURIComponent(pmid||'')}`);
+    const d=await r.json();
+    if(d.retracted && badgeEl) {
+      badgeEl.innerHTML+=' <span class="badge-ret">⚠️ RETRACTED</span>';
+    }
+  } catch(e){}
 }
 
 // ── Alert ──────────────────────────────────────────────────────────────────────
