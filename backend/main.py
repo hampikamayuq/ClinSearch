@@ -70,6 +70,22 @@ def _init_db():
             messages TEXT DEFAULT '[]',
             created TEXT
         );
+        CREATE TABLE IF NOT EXISTS workspace (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            paper_json TEXT,
+            notes TEXT DEFAULT '',
+            folder TEXT DEFAULT 'default',
+            saved_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS alerts (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            query TEXT,
+            sources TEXT DEFAULT 'pubmed',
+            last_check TEXT,
+            created TEXT
+        );
     """)
     conn.commit()
     conn.close()
@@ -656,6 +672,376 @@ async def session_manager(req: SessionRequest):
         return {"messages": json.loads(row[0] or "[]"), "topic": row[1] or ""}
 
     return {"error": "Unknown action"}
+
+
+# ───────────────────────────────────────
+# PERSISTENT WORKSPACE ENDPOINTS
+# ───────────────────────────────────────
+
+@app.get("/api/workspace")
+async def get_workspace(session_token: Optional[str] = None):
+    if not session_token:
+        raise HTTPException(401, "session_token required")
+    user = get_user(session_token)
+    if not user:
+        raise HTTPException(401, "Invalid token")
+    user_id = user.get("sub", "")
+    conn = sqlite3.connect(_DB_PATH)
+    rows = conn.execute(
+        "SELECT id, paper_json, notes, folder, saved_at FROM workspace WHERE user_id=? ORDER BY saved_at DESC",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    items = []
+    for r in rows:
+        try:
+            paper = json.loads(r[1] or "{}")
+        except Exception:
+            paper = {}
+        items.append({"id": r[0], "paper": paper, "notes": r[2] or "", "folder": r[3] or "default", "saved_at": r[4] or ""})
+    return {"items": items, "total": len(items)}
+
+
+class WorkspaceSaveRequest(BaseModel):
+    session_token: str
+    paper: dict
+    notes: Optional[str] = ""
+    folder: Optional[str] = "default"
+
+
+@app.post("/api/workspace")
+async def save_workspace(req: WorkspaceSaveRequest):
+    user = get_user(req.session_token)
+    if not user:
+        raise HTTPException(401, "Invalid token")
+    user_id = user.get("sub", "")
+    item_id = str(uuid.uuid4())[:12]
+    saved_at = datetime.utcnow().isoformat()
+    paper_json = json.dumps(req.paper)
+    conn = sqlite3.connect(_DB_PATH)
+    conn.execute(
+        "INSERT INTO workspace VALUES (?,?,?,?,?,?)",
+        (item_id, user_id, paper_json, req.notes or "", req.folder or "default", saved_at)
+    )
+    conn.commit()
+    conn.close()
+    return {"saved": True, "id": item_id}
+
+
+@app.delete("/api/workspace/{item_id}")
+async def delete_workspace(item_id: str, session_token: Optional[str] = None):
+    if not session_token:
+        raise HTTPException(401, "session_token required")
+    user = get_user(session_token)
+    if not user:
+        raise HTTPException(401, "Invalid token")
+    user_id = user.get("sub", "")
+    conn = sqlite3.connect(_DB_PATH)
+    conn.execute("DELETE FROM workspace WHERE id=? AND user_id=?", (item_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"deleted": True}
+
+
+# ───────────────────────────────────────
+# ALERTS ENDPOINTS
+# ───────────────────────────────────────
+
+@app.get("/api/alerts")
+async def get_alerts(session_token: Optional[str] = None):
+    if not session_token:
+        raise HTTPException(401, "session_token required")
+    user = get_user(session_token)
+    if not user:
+        raise HTTPException(401, "Invalid token")
+    user_id = user.get("sub", "")
+    conn = sqlite3.connect(_DB_PATH)
+    rows = conn.execute(
+        "SELECT id, query, sources, last_check, created FROM alerts WHERE user_id=? ORDER BY created DESC",
+        (user_id,)
+    ).fetchall()
+    conn.close()
+    return {"alerts": [{"id": r[0], "query": r[1], "sources": r[2], "last_check": r[3], "created": r[4]} for r in rows]}
+
+
+class AlertCreateRequest(BaseModel):
+    session_token: str
+    query: str
+    sources: Optional[str] = "pubmed"
+
+
+@app.post("/api/alerts")
+async def create_alert(req: AlertCreateRequest):
+    user = get_user(req.session_token)
+    if not user:
+        raise HTTPException(401, "Invalid token")
+    user_id = user.get("sub", "")
+    alert_id = str(uuid.uuid4())[:12]
+    created = datetime.utcnow().isoformat()
+    conn = sqlite3.connect(_DB_PATH)
+    conn.execute(
+        "INSERT INTO alerts VALUES (?,?,?,?,?,?)",
+        (alert_id, user_id, req.query, req.sources or "pubmed", created, created)
+    )
+    conn.commit()
+    conn.close()
+    return {"created": True, "id": alert_id}
+
+
+@app.delete("/api/alerts/{alert_id}")
+async def delete_alert(alert_id: str, session_token: Optional[str] = None):
+    if not session_token:
+        raise HTTPException(401, "session_token required")
+    user = get_user(session_token)
+    if not user:
+        raise HTTPException(401, "Invalid token")
+    user_id = user.get("sub", "")
+    conn = sqlite3.connect(_DB_PATH)
+    conn.execute("DELETE FROM alerts WHERE id=? AND user_id=?", (alert_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"deleted": True}
+
+
+# ───────────────────────────────────────
+# USER SESSIONS ENDPOINT
+# ───────────────────────────────────────
+
+@app.get("/api/user-sessions")
+async def get_user_sessions(session_token: Optional[str] = None):
+    if not session_token:
+        raise HTTPException(401, "session_token required")
+    user = get_user(session_token)
+    if not user:
+        raise HTTPException(401, "Invalid token")
+    user_email = user.get("email", user.get("sub", ""))
+    conn = sqlite3.connect(_DB_PATH)
+    rows = conn.execute(
+        "SELECT id, topic, created FROM sessions ORDER BY created DESC LIMIT 30"
+    ).fetchall()
+    conn.close()
+    return {"sessions": [{"id": r[0], "topic": r[1] or "Untitled", "created": r[2] or ""} for r in rows]}
+
+
+# ───────────────────────────────────────
+# PREPRINTS FEED
+# ───────────────────────────────────────
+
+@app.get("/api/preprints")
+async def preprints(query: str = ""):
+    from datetime import timedelta as td
+    end = datetime.utcnow()
+    start = end - td(days=30)
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
+    results = []
+    query_words = [w.lower() for w in query.split() if len(w) > 2] if query else []
+
+    async def fetch_server(server: str):
+        url = f"https://api.medrxiv.org/details/{server}/{start_str}/{end_str}/json"
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                r = await client.get(url)
+                if r.status_code != 200:
+                    return []
+                data = r.json()
+                papers = data.get("collection", [])
+                out = []
+                for p in papers:
+                    title = (p.get("title") or "").lower()
+                    abstract = (p.get("abstract") or "").lower()
+                    if query_words and not any(w in title or w in abstract for w in query_words):
+                        continue
+                    doi = p.get("doi", "")
+                    out.append({
+                        "title": p.get("title", ""),
+                        "doi": doi,
+                        "authors": p.get("authors", ""),
+                        "date": p.get("date", ""),
+                        "abstract": (p.get("abstract") or "")[:500],
+                        "server": server,
+                        "url": f"https://doi.org/{doi}" if doi else f"https://www.{server}.org",
+                    })
+                return out[:20]
+        except Exception as e:
+            logger.warning(f"{server} preprints error: {e}")
+            return []
+
+    med_results, bio_results = await asyncio.gather(
+        fetch_server("medrxiv"),
+        fetch_server("biorxiv"),
+        return_exceptions=True
+    )
+    if isinstance(med_results, list):
+        results.extend(med_results)
+    if isinstance(bio_results, list):
+        results.extend(bio_results)
+    return {"results": results, "total": len(results), "query": query}
+
+
+# ───────────────────────────────────────
+# CITATION GRAPH
+# ───────────────────────────────────────
+
+@app.get("/api/citations")
+async def citations(pmid: Optional[str] = None, doi: Optional[str] = None):
+    if not pmid and not doi:
+        raise HTTPException(400, "pmid or doi required")
+    headers = {"Accept": "application/json"}
+    if S2_API_KEY:
+        headers["x-api-key"] = S2_API_KEY
+    paper_id = f"PMID:{pmid}" if pmid else doi
+    base_url = f"https://api.semanticscholar.org/graph/v1/paper/{paper_id}"
+    paper_data = {}
+    references = []
+    cited_by = []
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(base_url, params={"fields": "title,year,authors,citationCount,abstract"}, headers=headers)
+            if r.status_code == 200:
+                paper_data = r.json()
+
+            r2 = await client.get(
+                base_url + "/references",
+                params={"fields": "title,year,authors,citationCount", "limit": 15},
+                headers=headers
+            )
+            if r2.status_code == 200:
+                for item in r2.json().get("data", []):
+                    cited = item.get("citedPaper", {})
+                    authors_list = cited.get("authors", [])
+                    references.append({
+                        "paperId": cited.get("paperId", ""),
+                        "title": cited.get("title", ""),
+                        "year": cited.get("year"),
+                        "authors": [a.get("name", "") for a in authors_list[:3]],
+                        "citationCount": cited.get("citationCount", 0),
+                    })
+
+            r3 = await client.get(
+                base_url + "/citations",
+                params={"fields": "title,year,authors,citationCount", "limit": 10},
+                headers=headers
+            )
+            if r3.status_code == 200:
+                for item in r3.json().get("data", []):
+                    citing = item.get("citingPaper", {})
+                    authors_list = citing.get("authors", [])
+                    cited_by.append({
+                        "paperId": citing.get("paperId", ""),
+                        "title": citing.get("title", ""),
+                        "year": citing.get("year"),
+                        "authors": [a.get("name", "") for a in authors_list[:3]],
+                        "citationCount": citing.get("citationCount", 0),
+                    })
+    except Exception as e:
+        logger.warning(f"Citation graph error: {e}")
+
+    return {"paper": paper_data, "references": references, "cited_by": cited_by}
+
+
+# ───────────────────────────────────────
+# PRE-REGISTRATION CHECK
+# ───────────────────────────────────────
+
+@app.get("/api/check-registration")
+async def check_registration(title: Optional[str] = None, pmid: Optional[str] = None):
+    query_term = title or pmid or ""
+    nct_match = re.search(r'NCT\d+', query_term, re.I)
+    nct_id = nct_match.group(0).upper() if nct_match else ""
+    registered = False
+    status = ""
+    primary_completion_date = ""
+    try:
+        search_q = nct_id if nct_id else (title or pmid or "")
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(
+                "https://clinicaltrials.gov/api/v2/studies",
+                params={"query.term": search_q, "pageSize": 3, "format": "json",
+                        "fields": "NCTId,BriefTitle,OverallStatus,PrimaryCompletionDate"}
+            )
+            if r.status_code == 200:
+                studies = r.json().get("studies", [])
+                if studies:
+                    registered = True
+                    first = studies[0].get("protocolSection", {})
+                    id_m = first.get("identificationModule", {})
+                    st_m = first.get("statusModule", {})
+                    nct_id = nct_id or id_m.get("nctId", "")
+                    status = st_m.get("overallStatus", "")
+                    pcd = st_m.get("primaryCompletionDateStruct", {})
+                    primary_completion_date = pcd.get("date", "") if isinstance(pcd, dict) else ""
+    except Exception as e:
+        logger.warning(f"Registration check error: {e}")
+    return {
+        "registered": registered,
+        "nct_id": nct_id,
+        "status": status,
+        "primary_completion_date": primary_completion_date,
+    }
+
+
+# ───────────────────────────────────────
+# PDF ANALYZER
+# ───────────────────────────────────────
+
+class PDFAnalyzeRequest(BaseModel):
+    url: str
+    session_token: Optional[str] = None
+
+
+@app.post("/api/pdf-analyze")
+async def pdf_analyze(req: PDFAnalyzeRequest):
+    text = ""
+    source_url = req.url
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            r = await client.get(req.url, headers={"User-Agent": "Mozilla/5.0 ClinSearch/3.0"})
+            if r.status_code == 200:
+                ct = r.headers.get("content-type", "")
+                if "html" in ct:
+                    html = re.sub(r'<script[^>]*>.*?</script>', '', r.text, flags=re.DOTALL)
+                    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
+                    html = re.sub(r'<[^>]+>', ' ', html)
+                    text = re.sub(r'\s+', ' ', html).strip()[:4000]
+                elif "pdf" in ct:
+                    doi_match = re.search(r'10\.\d{4,}/\S+', req.url)
+                    if doi_match:
+                        doi = doi_match.group(0).rstrip('/')
+                        r2 = await client.get(
+                            f"https://api.unpaywall.org/v2/{doi}",
+                            params={"email": PUBMED_EMAIL}
+                        )
+                        if r2.status_code == 200:
+                            best = (r2.json().get("best_oa_location") or {})
+                            oa_url = best.get("url_for_landing_page") or best.get("url", "")
+                            if oa_url and not oa_url.endswith(".pdf"):
+                                r3 = await client.get(oa_url, headers={"User-Agent": "Mozilla/5.0"})
+                                if r3.status_code == 200 and "html" in r3.headers.get("content-type", ""):
+                                    html = re.sub(r'<script[^>]*>.*?</script>', '', r3.text, flags=re.DOTALL)
+                                    html = re.sub(r'<style[^>]*>.*?</style>', '', html, flags=re.DOTALL)
+                                    html = re.sub(r'<[^>]+>', ' ', html)
+                                    text = re.sub(r'\s+', ' ', html).strip()[:4000]
+                                    source_url = oa_url
+    except Exception as e:
+        logger.warning(f"PDF fetch error: {e}")
+
+    if not text:
+        return {"analysis": "Could not retrieve readable text from the URL.", "source_url": source_url}
+
+    analysis_prompt = "Analyze this paper: extract key findings, methods, limitations, and clinical implications\n\n" + text[:4000]
+    messages = [{"role": "user", "content": analysis_prompt}]
+    try:
+        if GEMINI_API_KEY:
+            analysis = await call_gemini(messages, GEMINI_API_KEY)
+        elif GROQ_API_KEY:
+            analysis = await call_groq(messages, GROQ_API_KEY)
+        else:
+            return {"analysis": "No AI provider configured.", "source_url": source_url}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+    return {"analysis": analysis, "source_url": source_url}
 
 
 # ───────────────────────────────────────
@@ -1930,6 +2316,89 @@ Create a patient-friendly summary (no jargon, 8th-grade reading level):
 
 Write entirely in {lang}. Use simple vocabulary. No medical abbreviations."""
 
+    elif req.tool == "contradiction":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:12], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:500]}"
+        topic = req.query or "the provided papers"
+        prompt = f"""You are a systematic reviewer specializing in identifying contradictions in the medical literature for: {topic}
+
+Papers analyzed:{papers_ctx}
+
+## 🔍 Contradiction Analysis
+
+### Papers With Contradictory Findings
+For each contradiction, provide:
+
+#### Contradiction [N]: [Brief description of the conflict]
+- **Paper A:** [title, year] — finding: [specific result with numbers]
+- **Paper B:** [title, year] — finding: [specific result with numbers]
+- **Effect size discrepancy:** [quantify the difference — e.g., OR 1.8 vs OR 0.6]
+- **Clinical significance:** Is this difference clinically meaningful? [yes/no + rationale]
+
+### Methodological Reasons for Contradictions
+For each pair, analyze:
+- Population differences (age, severity, comorbidities)
+- Intervention differences (dose, duration, co-interventions)
+- Outcome measurement differences (instruments, timepoints)
+- Study design quality (RoB, confounding)
+- Publication bias or selective reporting
+- Statistical differences (underpowering, different effect measures)
+
+### 🟡 Papers With Different Effect Sizes (Same Direction)
+| Paper | Effect Size | 95% CI | Clinically Different? |
+|-------|------------|--------|----------------------|
+
+### 🔴 Papers With Opposite Conclusions
+| Paper A | Conclusion | Paper B | Conclusion | Likely Explanation |
+|---------|-----------|---------|-----------|-------------------|
+
+### ⚖️ How to Reconcile
+For each contradiction: what additional evidence would resolve it? Which finding is more trustworthy and why?
+
+### 📋 Clinical Guidance Despite Contradictions
+What can clinicians safely conclude despite the contradictory evidence?"""
+
+    elif req.tool == "sr_screen":
+        papers = req.papers or []
+        inclusion_criteria = (req.query or "").split("|||")[0].strip()
+        exclusion_criteria = (req.query or "").split("|||")[1].strip() if "|||" in (req.query or "") else ""
+        papers_ctx = ""
+        for i, p in enumerate(papers[:30], 1):
+            papers_ctx += f"\n[{i}] Title: {p.get('title','')}\n    Abstract: {(p.get('abstract','') or '')[:400]}\n    Year: {p.get('year','')} | Authors: {', '.join((p.get('authors') or [])[:2])}\n"
+
+        inc_text = inclusion_criteria if inclusion_criteria else "RCTs and systematic reviews on the topic"
+        exc_text = exclusion_criteria if exclusion_criteria else "Non-human studies, case reports, editorials"
+        prompt = f"""You are a systematic review screener. Screen the following papers for inclusion.
+
+INCLUSION CRITERIA: {inc_text}
+EXCLUSION CRITERIA: {exc_text}
+
+PAPERS TO SCREEN:
+{papers_ctx}
+
+For EACH paper, return a JSON array (no markdown, just JSON) with this structure:
+[
+  {{
+    "index": 1,
+    "decision": "INCLUDE",
+    "rationale": "Brief reason why this paper meets inclusion criteria"
+  }},
+  {{
+    "index": 2,
+    "decision": "EXCLUDE",
+    "rationale": "Specific exclusion criterion met"
+  }},
+  {{
+    "index": 3,
+    "decision": "UNCERTAIN",
+    "rationale": "Cannot determine without full text — specific uncertainty"
+  }}
+]
+
+Assess ALL {len(papers)} papers. Return only the JSON array."""
+
     else:
         raise HTTPException(400, "Unknown tool")
 
@@ -1953,6 +2422,14 @@ Write entirely in {lang}. Use simple vocabulary. No medical abbreviations."""
                 return {"tool": req.tool, "data": data, "raw": raw}
             except Exception:
                 return {"tool": req.tool, "data": {}, "raw": raw}
+
+        if req.tool == "sr_screen":
+            try:
+                match = re.search(r'\[[\s\S]+\]', raw)
+                decisions = json.loads(match.group()) if match else []
+                return {"tool": req.tool, "decisions": decisions, "raw": raw}
+            except Exception:
+                return {"tool": req.tool, "decisions": [], "raw": raw}
 
         return {"tool": req.tool, "result": raw}
     except HTTPException:

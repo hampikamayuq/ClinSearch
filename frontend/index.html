@@ -12,6 +12,8 @@
 <meta name="twitter:title" content="ClinSearch — Medical Research AI"/>
 <meta name="twitter:description" content="Free AI-powered medical literature search. 200M+ papers across PubMed, Semantic Scholar, OpenAlex."/>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔬</text></svg>"/>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="theme-color" content="#00d4aa"/>
 <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -345,6 +347,44 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .dl-area pre{font-family:var(--mono);font-size:.72rem;color:var(--muted);white-space:pre-wrap;line-height:1.6;max-height:200px;overflow-y:auto}
 .dl-actions{display:flex;gap:.4rem;margin-top:.55rem}
 
+/* ── Citation Graph ── */
+.cg-wrap{position:relative;overflow:hidden;border-radius:8px;border:1px solid var(--b1);background:var(--bg);margin:.5rem 0}
+.cg-wrap svg{display:block}
+.cg-tooltip{position:absolute;background:var(--s2);border:1px solid var(--b2);border-radius:6px;padding:.35rem .6rem;font-size:.72rem;pointer-events:none;z-index:10;max-width:200px;line-height:1.4;color:var(--text)}
+
+/* ── Preprints ── */
+.preprint-badge{display:inline-block;font-size:.6rem;font-weight:700;padding:.1rem .38rem;border-radius:3px;background:rgba(155,143,212,.15);color:var(--purple);border:1px solid rgba(155,143,212,.3);letter-spacing:.03em;flex-shrink:0}
+
+/* ── SR Screening modal ── */
+.screen-modal{max-width:680px}
+.screen-table{width:100%;border-collapse:collapse;font-size:.76rem;margin-top:.7rem}
+.screen-table th{background:var(--s2);padding:.32rem .5rem;text-align:left;font-weight:600;font-size:.7rem}
+.screen-table td{padding:.32rem .5rem;border-top:1px solid var(--b1);vertical-align:top}
+.badge-inc{display:inline-block;font-size:.65rem;font-weight:700;padding:.1rem .4rem;border-radius:3px;background:rgba(62,207,142,.15);color:var(--green);border:1px solid rgba(62,207,142,.3)}
+.badge-exc{display:inline-block;font-size:.65rem;font-weight:700;padding:.1rem .4rem;border-radius:3px;background:rgba(240,92,92,.15);color:var(--red);border:1px solid rgba(240,92,92,.3)}
+.badge-unc{display:inline-block;font-size:.65rem;font-weight:700;padding:.1rem .4rem;border-radius:3px;background:rgba(232,184,75,.15);color:var(--gold);border:1px solid rgba(232,184,75,.3)}
+.prisma-box{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:.75rem 1rem;margin-top:.75rem;display:flex;gap:1.5rem;flex-wrap:wrap}
+.prisma-stat{text-align:center}
+.prisma-num{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--accent)}
+.prisma-lbl{font-size:.67rem;color:var(--muted);margin-top:.1rem}
+
+/* ── Clinical Calculators ── */
+.calc-section{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.9rem 1rem;margin-top:.85rem}
+.calc-title{font-size:.85rem;font-weight:600;margin-bottom:.55rem;display:flex;align-items:center;gap:.45rem}
+.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.6rem}
+@media(max-width:500px){.calc-grid{grid-template-columns:1fr}}
+.calc-field label{display:block;font-size:.69rem;color:var(--muted);margin-bottom:.2rem}
+.calc-field input,.calc-field select{width:100%;background:var(--bg);border:1px solid var(--b2);border-radius:6px;padding:.35rem .55rem;color:var(--text);font-size:.81rem;font-family:var(--sans);outline:none}
+.calc-field input:focus,.calc-field select:focus{border-color:var(--accent)}
+.calc-result{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.65rem;margin-top:.5rem;font-size:.8rem;line-height:1.6}
+.calc-result .score{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--accent)}
+.calc-result .risk{font-size:.78rem;color:var(--muted);margin-top:.2rem}
+.calc-result .rec{font-size:.78rem;color:var(--text);margin-top:.35rem;padding-top:.35rem;border-top:1px solid var(--b1)}
+.calc-check-grid{display:grid;grid-template-columns:1fr 1fr;gap:.3rem;margin-bottom:.55rem}
+.calc-check{display:flex;align-items:center;gap:.35rem;font-size:.77rem;cursor:pointer;padding:.2rem .3rem;border-radius:4px;transition:background .1s}
+.calc-check:hover{background:var(--s2)}
+.calc-check input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;flex-shrink:0}
+
 /* ── Mobile ── */
 .hamburger{display:none;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:.26rem .45rem;line-height:1}
 .lsb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:79}
@@ -452,6 +492,35 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
   </div>
 </div>
 
+<!-- SR Screening Modal -->
+<div class="overlay" id="srScreenModal" onclick="if(event.target===this)closeSRScreen()">
+  <div class="modal screen-modal" style="max-width:680px">
+    <h3>📋 Systematic Review Screening</h3>
+    <p class="modal-sub">AI will screen each paper against your criteria and provide INCLUDE / EXCLUDE / UNCERTAIN decisions with rationale.</p>
+    <label class="mlbl">Inclusion Criteria</label>
+    <textarea id="inclCriteria" class="minp" rows="3" style="resize:vertical;font-size:.81rem;line-height:1.5" placeholder="e.g. RCTs or systematic reviews; adult patients; published after 2010; English or Portuguese"></textarea>
+    <label class="mlbl" style="margin-top:.55rem">Exclusion Criteria</label>
+    <textarea id="exclCriteria" class="minp" rows="3" style="resize:vertical;font-size:.81rem;line-height:1.5" placeholder="e.g. Animal studies; case reports; editorials; conference abstracts without full data"></textarea>
+    <div id="srScreenPaperCount" style="font-size:.75rem;color:var(--muted);margin:.4rem 0"></div>
+    <div class="mbtns">
+      <button class="mbtn mbtn-c" onclick="closeSRScreen()">Cancel</button>
+      <button class="mbtn mbtn-s" id="srScreenRunBtn" onclick="runSRScreen()">Screen Papers →</button>
+    </div>
+    <div id="srScreenResults" style="margin-top:.8rem;max-height:420px;overflow-y:auto;display:none"></div>
+  </div>
+</div>
+
+<!-- Citation Graph Modal -->
+<div class="overlay" id="citationModal" onclick="if(event.target===this)closeCitationModal()">
+  <div class="modal" style="max-width:720px;padding:1.25rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <h3 style="margin:0">🕸 Citation Graph</h3>
+      <button class="rsb-close" onclick="closeCitationModal()">✕</button>
+    </div>
+    <div id="citationGraphContent"><div style="color:var(--muted);font-size:.82rem">Loading…</div></div>
+  </div>
+</div>
+
 <!-- Sidebar overlay (mobile) -->
 <div class="lsb-overlay" id="lsbOverlay" onclick="closeSidebar()"></div>
 
@@ -500,6 +569,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <div class="mode-tab" id="mt-search" onclick="setMode('search')">🔍 Search</div>
       <div class="mode-tab" id="mt-trials" onclick="setMode('trials')">🏥 Trials</div>
       <div class="mode-tab" id="mt-paper" onclick="setMode('paper')">📄 Paper</div>
+      <div class="mode-tab" id="mt-preprints" onclick="setMode('preprints')">📰 Preprints</div>
       <div class="mode-tab" id="mt-stats" onclick="setMode('stats')">🧮 Stats</div>
       <div class="mode-tab" id="mt-export" onclick="setMode('export')">📦 Export</div>
     </div>
@@ -551,6 +621,112 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
           </div>
           <div id="nntResult" style="font-size:.78rem;color:var(--muted)">Enter control event rate + RRR <em>or</em> OR/RR to calculate.</div>
         </div>
+
+        <!-- CHADS2-VASc Calculator -->
+        <div class="calc-section">
+          <div class="calc-title">🫀 CHA₂DS₂-VASc Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(AF stroke risk)</span></div>
+          <div class="calc-check-grid" id="chadschecks">
+            <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> CHF or LVSD (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> Hypertension (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> Age ≥ 75 (+2)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> Diabetes mellitus (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> Stroke / TIA (+2)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> Vascular disease (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> Age 65–74 (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> Female sex (+1)</label>
+          </div>
+          <div id="chadsResult" class="calc-result" style="display:none"></div>
+        </div>
+
+        <!-- CKD-EPI eGFR -->
+        <div class="calc-section">
+          <div class="calc-title">🩺 CKD-EPI eGFR Calculator</div>
+          <div class="calc-grid">
+            <div class="calc-field"><label>Creatinine (mg/dL)</label><input type="number" id="ckdCr" step="0.01" min="0.1" placeholder="e.g. 1.2" oninput="calcCKD()"></div>
+            <div class="calc-field"><label>Age (years)</label><input type="number" id="ckdAge" min="18" max="120" placeholder="e.g. 55" oninput="calcCKD()"></div>
+            <div class="calc-field"><label>Sex</label><select id="ckdSex" onchange="calcCKD()"><option value="male">Male</option><option value="female">Female</option></select></div>
+          </div>
+          <div id="ckdResult" class="calc-result" style="display:none"></div>
+        </div>
+
+        <!-- Child-Pugh Score -->
+        <div class="calc-section">
+          <div class="calc-title">🏥 Child-Pugh Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(cirrhosis severity)</span></div>
+          <div class="calc-grid">
+            <div class="calc-field"><label>Bilirubin (mg/dL)</label>
+              <select id="cpBili" onchange="calcChildPugh()">
+                <option value="1">< 2 (score 1)</option><option value="2">2–3 (score 2)</option><option value="3">> 3 (score 3)</option>
+              </select></div>
+            <div class="calc-field"><label>Albumin (g/dL)</label>
+              <select id="cpAlb" onchange="calcChildPugh()">
+                <option value="1">> 3.5 (score 1)</option><option value="2">2.8–3.5 (score 2)</option><option value="3">< 2.8 (score 3)</option>
+              </select></div>
+            <div class="calc-field"><label>INR</label>
+              <select id="cpINR" onchange="calcChildPugh()">
+                <option value="1">< 1.7 (score 1)</option><option value="2">1.7–2.3 (score 2)</option><option value="3">> 2.3 (score 3)</option>
+              </select></div>
+            <div class="calc-field"><label>Ascites</label>
+              <select id="cpAsc" onchange="calcChildPugh()">
+                <option value="1">None (score 1)</option><option value="2">Mild (score 2)</option><option value="3">Moderate/Severe (score 3)</option>
+              </select></div>
+            <div class="calc-field"><label>Encephalopathy</label>
+              <select id="cpEnc" onchange="calcChildPugh()">
+                <option value="1">None (score 1)</option><option value="2">Grade 1–2 (score 2)</option><option value="3">Grade 3–4 (score 3)</option>
+              </select></div>
+          </div>
+          <div id="cpResult" class="calc-result" style="display:none"></div>
+        </div>
+
+        <!-- Wells DVT Score -->
+        <div class="calc-section">
+          <div class="calc-title">🩸 Wells DVT Score</div>
+          <div class="calc-check-grid" id="wellschecks">
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Active cancer (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Paralysis / plaster cast (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Bedridden >3d or surgery <12wk (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Localized tenderness (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Entire leg swollen (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Calf swelling >3cm (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Pitting edema (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Collateral veins (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Previous DVT (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Alternative diagnosis likely (−2)</label>
+          </div>
+          <div id="wellsResult" class="calc-result" style="display:none"></div>
+        </div>
+
+        <!-- SOFA Score -->
+        <div class="calc-section">
+          <div class="calc-title">🏨 SOFA Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(ICU mortality)</span></div>
+          <div class="calc-grid">
+            <div class="calc-field"><label>PaO₂/FiO₂ ratio</label>
+              <select id="sofaResp" onchange="calcSOFA()">
+                <option value="0">≥ 400 (0)</option><option value="1">300–399 (1)</option><option value="2">200–299 (2)</option><option value="3">100–199 (3)</option><option value="4">< 100 (4)</option>
+              </select></div>
+            <div class="calc-field"><label>Platelets (×10³/μL)</label>
+              <select id="sofaPlat" onchange="calcSOFA()">
+                <option value="0">≥ 150 (0)</option><option value="1">100–149 (1)</option><option value="2">50–99 (2)</option><option value="3">20–49 (3)</option><option value="4">< 20 (4)</option>
+              </select></div>
+            <div class="calc-field"><label>Bilirubin (mg/dL)</label>
+              <select id="sofaBili" onchange="calcSOFA()">
+                <option value="0">< 1.2 (0)</option><option value="1">1.2–1.9 (1)</option><option value="2">2.0–5.9 (2)</option><option value="3">6.0–11.9 (3)</option><option value="4">≥ 12 (4)</option>
+              </select></div>
+            <div class="calc-field"><label>Cardiovascular</label>
+              <select id="sofaCV" onchange="calcSOFA()">
+                <option value="0">No vasopressors (0)</option><option value="1">MAP < 70 (1)</option><option value="2">DA ≤5 or dobu (2)</option><option value="3">DA >5 or NE ≤0.1 (3)</option><option value="4">DA >15 or NE >0.1 (4)</option>
+              </select></div>
+            <div class="calc-field"><label>GCS</label>
+              <select id="sofaGCS" onchange="calcSOFA()">
+                <option value="0">15 (0)</option><option value="1">13–14 (1)</option><option value="2">10–12 (2)</option><option value="3">6–9 (3)</option><option value="4">< 6 (4)</option>
+              </select></div>
+            <div class="calc-field"><label>Creatinine (mg/dL)</label>
+              <select id="sofaCr" onchange="calcSOFA()">
+                <option value="0">< 1.2 (0)</option><option value="1">1.2–1.9 (1)</option><option value="2">2.0–3.4 (2)</option><option value="3">3.5–4.9 (3)</option><option value="4">≥ 5 (4)</option>
+              </select></div>
+          </div>
+          <div id="sofaResult" class="calc-result" style="display:none"></div>
+        </div>
+
       </div>
     </div>
 
@@ -821,6 +997,7 @@ function setMode(m) {
     search:'Search term or MeSH query…',
     trials:'Condition or intervention for trials…',
     paper:'Enter PMID or DOI…',
+    preprints:'Search preprints (medRxiv · bioRxiv)…',
     stats:'Describe your 2×2 table or ask for statistics…',
     export:'List DOIs to export (one per line)…',
   };
@@ -871,6 +1048,8 @@ async function send() {
 
   if(S.mode==='search') {
     await searchMode(text);
+  } else if(S.mode==='preprints') {
+    await preprintsMode(text);
   } else {
     addMsg('user',text);
     S.history.push({role:'user',content:text});
@@ -930,6 +1109,8 @@ async function searchMode(query) {
       <button class="act-btn" onclick="showCMEQuestions(window._srchPapers,window._srchQuery)">📚 CME Quiz</button>
       <button class="act-btn" onclick="showSRProtocol(window._srchPapers,window._srchQuery)">📋 SR Protocol</button>
       <button class="act-btn" onclick="showSampleSize(window._srchPapers,window._srchQuery)">🧮 Sample Size</button>
+      <button class="act-btn" onclick="openSRScreen(window._srchPapers)">📋 Screen Papers</button>
+      <button class="act-btn" onclick="showContradictions(window._srchPapers,window._srchQuery)">⚡ Contradictions</button>
     `;
     window._srchPapers=papers; window._srchQuery=query;
     document.getElementById('msgs').appendChild(actBar);
@@ -976,6 +1157,7 @@ async function searchMode(query) {
           <button class="rbtn" onclick='showRoB(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>⚖️ RoB</button>
           <button class="rbtn" onclick='showStatsCritic(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>📐 Stats</button>
           <button class="rbtn" onclick='showCMEQuestions([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], "${esc(p.title||'')}")'>📚 CME</button>
+          ${pmid?`<button class="rbtn" onclick="showCitationGraph('${pmid}','')">🕸 Citations</button>`:(doi?`<button class="rbtn" onclick="showCitationGraph('','${doi}')">🕸 Citations</button>`:'')}
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -1901,6 +2083,303 @@ function showAlert(msg) {
   document.body.appendChild(a);
   setTimeout(()=>a.remove(),3200);
 }
+
+// ── Preprints Mode ─────────────────────────────────────────────────────────────
+async function preprintsMode(query) {
+  const uDiv=document.createElement('div');uDiv.className='msg';
+  uDiv.innerHTML=`<div class="msg-av av-u">U</div><div class="msg-body"><div class="msg-role">You</div><div class="msg-text">${esc(query)}</div></div>`;
+  document.getElementById('msgs').appendChild(uDiv);scrollBot();
+  const loadDiv=document.createElement('div');loadDiv.className='msg';loadDiv.style.opacity='.7';
+  loadDiv.innerHTML=`<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="msg-role">ClinSearch</div><div class="msg-text" style="color:var(--muted);font-size:.82rem">📰 Fetching preprints from medRxiv and bioRxiv…</div></div>`;
+  document.getElementById('msgs').appendChild(loadDiv);scrollBot();
+  try {
+    const r=await fetch(`${API}/api/preprints?query=${encodeURIComponent(query)}`);
+    const d=await r.json();
+    loadDiv.remove();
+    if(!d.results?.length){addMsg('ai','No preprints found for this query in the last 30 days.');return;}
+    const container=document.createElement('div');container.style.cssText='margin:.4rem 0 .6rem 2.8rem';
+    container.innerHTML=`<div style="font-size:.72rem;color:var(--muted);margin-bottom:.4rem;font-family:var(--mono)">📰 <strong style="color:var(--text)">${d.results.length} preprints</strong> from medRxiv · bioRxiv (last 30 days)</div>
+    <div class="r-grid">${d.results.map(p=>{
+      const url=p.url||'#';
+      const serverClass=p.server==='medrxiv'?'src-pm':'src-s2';
+      const serverLabel=p.server==='medrxiv'?'medRxiv':'bioRxiv';
+      return `<div class="r-card">
+        <div class="r-top">
+          <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
+          <div style="display:flex;gap:.3rem;align-items:center">
+            <span class="preprint-badge">PREPRINT</span>
+            <span class="r-src ${serverClass}">${serverLabel}</span>
+          </div>
+        </div>
+        <div class="r-meta">
+          ${p.authors?`<span>${esc(String(p.authors).slice(0,60))}</span><span class="r-sep">·</span>`:''}
+          <span>${p.date||''}</span>
+        </div>
+        ${p.abstract?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(p.abstract.slice(0,320))}…</div>`:''}
+        <div class="r-acts">
+          <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
+          ${p.doi?`<a class="rbtn" href="https://doi.org/${p.doi}" target="_blank" rel="noopener">DOI</a>`:''}
+          <button class="rbtn rbtn-save" onclick='saveToWorkspace(${JSON.stringify({id:p.doi||p.url,title:p.title,authors:typeof p.authors==="string"?[p.authors]:(p.authors||[]),year:(p.date||"").slice(0,4),doi:p.doi,url:p.url,source:p.server})})'>💾 Save</button>
+          <button class="rbtn" onclick='showPICO(${JSON.stringify({title:p.title,abstract:p.abstract})})'>🔬 PICO</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+    document.getElementById('msgs').appendChild(container);scrollBot();
+  } catch(e){loadDiv.remove();addMsg('ai','⚠️ Preprints error: '+e.message);}
+}
+
+// ── SR Screening ──────────────────────────────────────────────────────────────
+let _srScreenPapers=[];
+function openSRScreen(papers) {
+  _srScreenPapers=papers||window._srchPapers||[];
+  const cnt=document.getElementById('srScreenPaperCount');
+  if(cnt) cnt.textContent=`${_srScreenPapers.length} papers queued for screening`;
+  document.getElementById('srScreenResults').style.display='none';
+  document.getElementById('srScreenResults').innerHTML='';
+  document.getElementById('srScreenModal').classList.add('open');
+}
+function closeSRScreen(){document.getElementById('srScreenModal').classList.remove('open');}
+
+async function runSRScreen() {
+  const incl=document.getElementById('inclCriteria').value.trim();
+  const excl=document.getElementById('exclCriteria').value.trim();
+  if(!_srScreenPapers.length){showAlert('⚠️ No papers to screen');return;}
+  const btn=document.getElementById('srScreenRunBtn');
+  btn.disabled=true;btn.textContent='⏳ Screening…';
+  const resultsDiv=document.getElementById('srScreenResults');
+  resultsDiv.style.display='block';
+  resultsDiv.innerHTML=`<div style="color:var(--muted);font-size:.82rem">⚡ AI screening ${_srScreenPapers.length} papers…</div>`;
+  try {
+    const r=await fetch(`${API}/api/ai-tool`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({tool:'sr_screen',papers:_srScreenPapers,query:incl+'|||'+excl,session_token:S.session||''})
+    });
+    const d=await r.json();
+    const decisions=d.decisions||[];
+    let include=0,exclude=0,uncertain=0;
+    decisions.forEach(dec=>{
+      if(dec.decision==='INCLUDE') include++;
+      else if(dec.decision==='EXCLUDE') exclude++;
+      else uncertain++;
+    });
+    let html=`<table class="screen-table">
+      <thead><tr><th>#</th><th>Title</th><th>Decision</th><th>Rationale</th></tr></thead>
+      <tbody>`;
+    decisions.forEach(dec=>{
+      const paper=_srScreenPapers[(dec.index||1)-1]||{};
+      const badge=dec.decision==='INCLUDE'?'badge-inc':dec.decision==='EXCLUDE'?'badge-exc':'badge-unc';
+      html+=`<tr>
+        <td style="font-family:var(--mono);font-size:.68rem;color:var(--dim)">${dec.index||''}</td>
+        <td style="max-width:240px"><div style="font-family:var(--serif);font-size:.78rem;line-height:1.3">${esc((paper.title||'').slice(0,100))}</div><div style="font-size:.67rem;color:var(--dim)">${paper.year||''}</div></td>
+        <td><span class="${badge}">${dec.decision||'?'}</span></td>
+        <td style="font-size:.73rem;color:var(--muted);line-height:1.5">${esc(dec.rationale||'')}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table>
+    <div class="prisma-box">
+      <div class="prisma-stat"><div class="prisma-num">${_srScreenPapers.length}</div><div class="prisma-lbl">Records identified</div></div>
+      <div class="prisma-stat"><div class="prisma-num" style="color:var(--green)">${include}</div><div class="prisma-lbl">Included</div></div>
+      <div class="prisma-stat"><div class="prisma-num" style="color:var(--red)">${exclude}</div><div class="prisma-lbl">Excluded</div></div>
+      <div class="prisma-stat"><div class="prisma-num" style="color:var(--gold)">${uncertain}</div><div class="prisma-lbl">Uncertain (full text needed)</div></div>
+    </div>`;
+    resultsDiv.innerHTML=html;
+  } catch(e){resultsDiv.innerHTML=`<span style="color:#ff5050">⚠️ ${e.message}</span>`;}
+  finally{btn.disabled=false;btn.textContent='Screen Papers →';}
+}
+
+// ── Contradiction Detector ────────────────────────────────────────────────────
+async function showContradictions(papers, query) {
+  const resultEl=addToolPanel(`⚡ Contradiction Analysis — "${query}"`);
+  await runAITool('contradiction',{papers,query},resultEl);
+}
+
+// ── Citation Graph ────────────────────────────────────────────────────────────
+async function showCitationGraph(pmid, doi) {
+  document.getElementById('citationModal').classList.add('open');
+  const cont=document.getElementById('citationGraphContent');
+  cont.innerHTML=`<div style="color:var(--muted);font-size:.82rem">⏳ Loading citation graph…</div>`;
+  try {
+    const params=new URLSearchParams();
+    if(pmid) params.set('pmid',pmid);
+    if(doi)  params.set('doi',doi);
+    const r=await fetch(`${API}/api/citations?${params}`);
+    const d=await r.json();
+    renderCitationGraph(d, cont);
+  } catch(e){cont.innerHTML=`<span style="color:#ff5050">⚠️ ${e.message}</span>`;}
+}
+
+function closeCitationModal(){document.getElementById('citationModal').classList.remove('open');}
+
+function renderCitationGraph(data, container) {
+  const paper=data.paper||{};
+  const refs=(data.references||[]).slice(0,12);
+  const cited=(data.cited_by||[]).slice(0,8);
+  const W=660,H=420,cx=W/2,cy=H/2;
+  const nodes=[];
+  const links=[];
+  // Center node
+  const centerNode={id:'center',label:(paper.authors?.[0]?.name||'This Paper'),title:paper.title||'This Paper',x:cx,y:cy,type:'center'};
+  nodes.push(centerNode);
+  // Reference nodes (left semicircle)
+  refs.forEach((ref,i)=>{
+    const angle=Math.PI/2+((i/(Math.max(refs.length-1,1)))-0.5)*Math.PI*1.2;
+    const r=155;
+    const x=cx+r*Math.cos(angle);
+    const y=cy+r*Math.sin(angle);
+    const auth=(ref.authors||[])[0]||'?';
+    const lastName=auth.split(' ').pop()||auth;
+    nodes.push({id:'ref'+i,label:lastName+(ref.year?' '+ref.year:''),title:ref.title||'',x,y,type:'ref'});
+    links.push({from:'center',to:'ref'+i});
+  });
+  // Cited-by nodes (right semicircle)
+  cited.forEach((cit,i)=>{
+    const angle=-Math.PI/2+((i/(Math.max(cited.length-1,1)))-0.5)*Math.PI*1.2;
+    const r=155;
+    const x=cx+r*Math.cos(angle);
+    const y=cy+r*Math.sin(angle);
+    const auth=(cit.authors||[])[0]||'?';
+    const lastName=auth.split(' ').pop()||auth;
+    nodes.push({id:'cit'+i,label:lastName+(cit.year?' '+cit.year:''),title:cit.title||'',x,y,type:'cit'});
+    links.push({from:'cit'+i,to:'center'});
+  });
+
+  // Simple spring physics (50 iterations)
+  function dist(a,b){return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2)||0.01;}
+  for(let iter=0;iter<50;iter++){
+    nodes.forEach((n,ni)=>{
+      if(n.type==='center') return;
+      let fx=0,fy=0;
+      // Repulsion from other non-center nodes
+      nodes.forEach((m,mi)=>{
+        if(ni===mi||m.type==='center') return;
+        const d=dist(n,m);
+        if(d<80){const f=80/d;fx+=(n.x-m.x)*f*0.05;fy+=(n.y-m.y)*f*0.05;}
+      });
+      // Spring toward center
+      const d=dist(n,centerNode);
+      const target=n.type==='ref'?155:165;
+      const f=(d-target)*0.08;
+      fx-=(n.x-cx)/d*f;
+      fy-=(n.y-cy)/d*f;
+      n.x=Math.max(40,Math.min(W-40,n.x+fx));
+      n.y=Math.max(25,Math.min(H-25,n.y+fy));
+    });
+  }
+
+  const ACC='#00d4aa',BLUE='#5b8fd4',TEXT='#dce8f4',MUT='#6a8099',B1='#1a2638';
+  let svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="background:#080c12;border-radius:8px;display:block">`;
+  // Legend
+  svg+=`<circle cx="16" cy="14" r="5" fill="${ACC}"/><text x="24" y="18" font-size="10" fill="${MUT}" font-family="monospace">This paper</text>`;
+  svg+=`<circle cx="110" cy="14" r="5" fill="${BLUE}"/><text x="118" y="18" font-size="10" fill="${MUT}" font-family="monospace">Cited by</text>`;
+  svg+=`<circle cx="190" cy="14" r="5" fill="${B1}" stroke="${TEXT}" stroke-width="1"/><text x="198" y="18" font-size="10" fill="${MUT}" font-family="monospace">References</text>`;
+  // Links
+  links.forEach(l=>{
+    const a=nodes.find(n=>n.id===l.from);
+    const b=nodes.find(n=>n.id===l.to);
+    if(a&&b) svg+=`<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${B1}" stroke-width="1.2" opacity="0.7"/>`;
+  });
+  // Nodes
+  nodes.forEach(n=>{
+    const r=n.type==='center'?18:9;
+    const fill=n.type==='center'?ACC:n.type==='cit'?BLUE:B1;
+    const stroke=n.type==='ref'?TEXT:'none';
+    const titleAttr=n.title.replace(/"/g,'&quot;').slice(0,120);
+    svg+=`<g class="cg-node" style="cursor:pointer">
+      <title>${titleAttr}</title>
+      <circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="1"/>
+      <text x="${n.x.toFixed(1)}" y="${(n.y+r+11).toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${MUT}" font-family="monospace">${esc(n.label.slice(0,18))}</text>
+    </g>`;
+  });
+  svg+=`</svg>`;
+
+  const totalCit=paper.citationCount||0;
+  container.innerHTML=`
+    <div style="margin-bottom:.5rem;font-size:.8rem"><strong style="font-family:var(--serif)">${esc((paper.title||'').slice(0,80))}</strong>
+    <span style="color:var(--muted);font-size:.72rem;margin-left:.5rem">⭐ ${totalCit} citations</span></div>
+    <div class="cg-wrap">${svg}</div>
+    <div style="display:flex;gap:1.5rem;font-size:.73rem;color:var(--muted);margin-top:.5rem">
+      <span>References shown: <strong style="color:var(--text)">${refs.length}</strong></span>
+      <span>Cited by shown: <strong style="color:var(--text)">${cited.length}</strong></span>
+    </div>`;
+}
+
+// ── Clinical Calculators ──────────────────────────────────────────────────────
+
+// CHADS2-VASc
+function calcCHADS2() {
+  const checks=document.querySelectorAll('#chadschecks input[type=checkbox]');
+  const vals=[1,1,2,1,2,1,1,1];
+  let score=0;
+  checks.forEach((c,i)=>{if(c.checked) score+=vals[i];});
+  const risks=[0.2,0.6,2.2,3.2,4.0,6.7,9.8,9.6,12.5,15.2];
+  const risk=risks[Math.min(score,9)]||15.2;
+  let rec='';
+  if(score>=2) rec='Anticoagulation recommended (NOAC preferred)';
+  else if(score===1) rec='Consider anticoagulation (males); no therapy generally recommended (females)';
+  else rec='No antithrombotic therapy';
+  const el=document.getElementById('chadsResult');
+  el.style.display='block';
+  el.innerHTML=`<div class="score">${score}</div><div class="risk">Annual stroke risk: ~${risk}%</div><div class="rec"><strong>Recommendation:</strong> ${rec}</div>`;
+}
+
+// CKD-EPI eGFR
+function calcCKD() {
+  const cr=parseFloat(document.getElementById('ckdCr')?.value);
+  const age=parseFloat(document.getElementById('ckdAge')?.value);
+  const sex=document.getElementById('ckdSex')?.value;
+  const el=document.getElementById('ckdResult');
+  if(isNaN(cr)||isNaN(age)||cr<=0||age<=0){el.style.display='none';return;}
+  const kappa=sex==='female'?0.7:0.9;
+  const alpha=sex==='female'?-0.241:-0.302;
+  const ratio=cr/kappa;
+  const egfr=142*Math.pow(Math.min(ratio,1),alpha)*Math.pow(Math.max(ratio,1),-1.200)*Math.pow(0.9938,age)*(sex==='female'?1.012:1);
+  const g=egfr>=90?'G1 (normal)':egfr>=60?'G2 (mildly decreased)':egfr>=45?'G3a':egfr>=30?'G3b':egfr>=15?'G4 (severely decreased)':'G5 (kidney failure)';
+  el.style.display='block';
+  el.innerHTML=`<div class="score">${Math.round(egfr)}</div><div class="risk">mL/min/1.73m² — CKD Stage: <strong>${g}</strong></div>`;
+}
+
+// Child-Pugh
+function calcChildPugh() {
+  const s=parseInt(document.getElementById('cpBili')?.value||'1')+
+          parseInt(document.getElementById('cpAlb')?.value||'1')+
+          parseInt(document.getElementById('cpINR')?.value||'1')+
+          parseInt(document.getElementById('cpAsc')?.value||'1')+
+          parseInt(document.getElementById('cpEnc')?.value||'1');
+  const cls=s<=6?'A (good, 1-yr survival 100%)':s<=9?'B (moderate, 1-yr survival 80%)':'C (poor, 1-yr survival 45%)';
+  const el=document.getElementById('cpResult');
+  el.style.display='block';
+  el.innerHTML=`<div class="score">${s}</div><div class="risk">Child-Pugh Class: <strong>${cls}</strong></div>`;
+}
+
+// Wells DVT
+function calcWells() {
+  const checks=document.querySelectorAll('#wellschecks input[type=checkbox]');
+  const vals=[1,1,1,1,1,1,1,1,1,-2];
+  let score=0;
+  checks.forEach((c,i)=>{if(c.checked) score+=vals[i];});
+  const prob=score<=0?'Low (DVT ~5%)':score<=2?'Intermediate (DVT ~17%)':'High (DVT ~53%)';
+  const action=score<=0?'D-dimer test; if negative, DVT excluded':score<=2?'D-dimer or proximal ultrasound':'Proximal ultrasound (DVT highly likely)';
+  const el=document.getElementById('wellsResult');
+  el.style.display='block';
+  el.innerHTML=`<div class="score">${score}</div><div class="risk">Pre-test probability: <strong>${prob}</strong></div><div class="rec"><strong>Action:</strong> ${action}</div>`;
+}
+
+// SOFA Score
+function calcSOFA() {
+  const s=parseInt(document.getElementById('sofaResp')?.value||'0')+
+          parseInt(document.getElementById('sofaPlat')?.value||'0')+
+          parseInt(document.getElementById('sofaBili')?.value||'0')+
+          parseInt(document.getElementById('sofaCV')?.value||'0')+
+          parseInt(document.getElementById('sofaGCS')?.value||'0')+
+          parseInt(document.getElementById('sofaCr')?.value||'0');
+  const mort=s<=6?'< 10%':s<=9?'15–20%':s<=12?'40–50%':s<=14?'50–60%':'> 80%';
+  const el=document.getElementById('sofaResult');
+  el.style.display='block';
+  el.innerHTML=`<div class="score">${s}</div><div class="risk">Predicted mortality: <strong>${mort}</strong></div><div class="rec">${s>=11?'<strong style="color:#ff5050">Very high risk — consider ICU escalation</strong>':s>=7?'High risk — close monitoring':s>=2?'Moderate risk':'Low risk'}</div>`;
+}
+
+// ── PWA service worker registration ──────────────────────────────────────────
+if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 </script>
 </body>
 </html>

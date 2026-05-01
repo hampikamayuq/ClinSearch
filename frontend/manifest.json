@@ -1,0 +1,13 @@
+{
+  "name": "ClinSearch — Medical Research AI",
+  "short_name": "ClinSearch",
+  "description": "Free AI-powered medical literature search",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080c12",
+  "theme_color": "#00d4aa",
+  "icons": [
+    {"src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%2300d4aa'/><text y='140' x='20' font-size='140' font-family='monospace' fill='%23080c12'>CS</text></svg>", "sizes": "192x192", "type": "image/svg+xml"},
+    {"src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='80' fill='%2300d4aa'/><text y='380' x='40' font-size='380' font-family='monospace' fill='%23080c12'>CS</text></svg>", "sizes": "512x512", "type": "image/svg+xml"}
+  ]
+}
