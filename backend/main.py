@@ -354,13 +354,16 @@ async def _inject_search_context(messages: list) -> list:
             if isinstance(r, list):
                 papers.extend(r)
         if not papers:
-            return messages
-        context = "\n\n[REAL PAPERS RETRIEVED — you MUST cite these using [1],[2] etc. and extract their actual data: study design, N, effect sizes, CI, p-values, NNT. Do NOT invent additional papers.]\n"
+            context = "\n\n[NO REAL PAPERS RETRIEVED FOR THIS QUESTION. You must clearly say evidence is insufficient and must not invent citations or paper details. Offer a narrower PICO/search strategy.]\n"
+        else:
+            papers = _rank_by_evidence(_dedupe(papers), last_user)
+            context = "\n\n[REAL PAPERS RETRIEVED — you MUST cite these using clickable citations like [[1] Author, Year](URL), and extract only their actual data: study design, N, effect sizes, CI, p-values, NNT. Do NOT invent additional papers. If data are missing, say NR.]\n"
         for i, p in enumerate(papers[:9], 1):
             authors = ", ".join((p.get("authors") or [])[:3])
             abstract = (p.get('abstract') or '')[:700]
             context += (f"\n[{i}] \"{p['title']}\"\n"
-                       f"    Authors: {authors} | Year: {p.get('year','')} | Journal: {p.get('journal','')} | Citations: {p.get('citations','')}\n"
+                       f"    Authors: {authors} | Year: {p.get('year','')} | Journal: {p.get('journal','')} | Study type: {p.get('study_type','')} | Citations: {p.get('citations','')}\n"
+                       f"    PMID: {p.get('pmid','')} | DOI: {p.get('doi','')}\n"
                        f"    Abstract: {abstract}\n"
                        f"    URL: {p.get('url','')}\n")
         enriched = []
@@ -478,6 +481,21 @@ def _relevance_score(p: dict, terms: list, phrase: str) -> int:
     return score
 
 
+def _clean_pico_part(value: Optional[str]) -> str:
+    value = (value or "").strip()
+    value = re.sub(r"\s+", " ", value)
+    return value[:160]
+
+
+def _build_pico_query(q: str, patient: str = "", intervention: str = "",
+                      comparator: str = "", outcome: str = "") -> str:
+    parts = [_clean_pico_part(x) for x in (patient, intervention, comparator, outcome)]
+    parts = [p for p in parts if p]
+    if not parts:
+        return q
+    return " AND ".join(parts)
+
+
 def _rank_by_evidence(papers: list, query: str = "") -> list:
     """Sort papers by query relevance, evidence quality, recency, then citations."""
     terms = _query_terms(query)
@@ -495,6 +513,21 @@ def _rank_by_evidence(papers: list, query: str = "") -> list:
     return sorted(papers, key=_score)
 
 
+def _paper_flags(p: dict) -> list:
+    text = " ".join(str(p.get(k) or "") for k in ("title", "abstract", "journal", "source", "server")).lower()
+    pub_types = [str(x).lower() for x in (p.get("publication_types") or [])]
+    flags = []
+    if any("retracted" in t or "retraction of publication" in t for t in pub_types) or re.search(r"\bretracted\b|retraction notice|withdrawn", text):
+        flags.append({"type": "retracted", "level": "danger", "label": "Retracted/withdrawn signal"})
+    elif any("expression of concern" in t for t in pub_types) or "expression of concern" in text:
+        flags.append({"type": "concern", "level": "danger", "label": "Expression of concern"})
+    if re.search(r"medrxiv|biorxiv|preprint", text):
+        flags.append({"type": "preprint", "level": "warning", "label": "Preprint / not peer reviewed"})
+    if (p.get("study_type") or "") in {"Observational", "Cohort", "Case Report", ""}:
+        flags.append({"type": "low_evidence", "level": "warning", "label": f"Lower-certainty evidence: {p.get('study_type') or 'unclassified'}"})
+    return flags
+
+
 @app.get("/api/search")
 async def search_all(
     q: str,
@@ -507,16 +540,22 @@ async def search_all(
     study_type: Optional[str] = None,
     humans: bool = False,
     pico: bool = False,
+    patient: Optional[str] = None,
+    intervention: Optional[str] = None,
+    comparator: Optional[str] = None,
+    outcome: Optional[str] = None,
     sources: Optional[str] = None,
 ):
     """Parallel search across selected sources with dedup, quality ranking, and caching."""
-    cache_key = f"{q}|{sources}|{n}|{offset}|{year_from}|{year_to}|{open_access}|{reviews_only}|{study_type}|{humans}|{pico}"
+    pico_query = _build_pico_query(q, patient or "", intervention or "", comparator or "", outcome or "")
+    search_q = pico_query if pico_query != q else q
+    cache_key = f"{q}|{search_q}|{sources}|{n}|{offset}|{year_from}|{year_to}|{open_access}|{reviews_only}|{study_type}|{humans}|{pico}|{patient}|{intervention}|{comparator}|{outcome}"
     cached = _cache_get(_search_cache, cache_key, _CACHE_TTL_SEARCH)
     if cached:
         return cached
 
     requested = _normalize_sources(sources)
-    pubmed_q = q
+    pubmed_q = search_q
     if pico:
         pubmed_q += " AND (clinical trial[pt] OR randomized controlled trial[pt] OR cohort studies[mh] OR systematic review[sb])"
     if reviews_only:
@@ -528,21 +567,21 @@ async def search_all(
     if "pubmed" in requested:
         coros.append(_pubmed_search(pubmed_q, n, year_from, open_access, humans))
     if "s2" in requested:
-        coros.append(_s2_search(q, n, year_from, open_access))
+        coros.append(_s2_search(search_q, n, year_from, open_access))
     if "openalex" in requested:
-        coros.append(_openalex_search(q, n, year_from, open_access,
+        coros.append(_openalex_search(search_q, n, year_from, open_access,
                                       "review" if reviews_only else None))
     if "europepmc" in requested or "cochrane" in requested:
-        coros.append(_europepmc_search(q, n, offset, year_from, year_to,
+        coros.append(_europepmc_search(search_q, n, offset, year_from, year_to,
                                        open_access, "cochrane" in requested or reviews_only))
     if "who" in requested:
-        coros.append(_who_iris_search(q, n))
+        coros.append(_who_iris_search(search_q, n))
 
     if not coros:
         coros = [
             _pubmed_search(pubmed_q, n, year_from, open_access, humans),
-            _s2_search(q, n, year_from, open_access),
-            _openalex_search(q, n, year_from, open_access, None),
+            _s2_search(search_q, n, year_from, open_access),
+            _openalex_search(search_q, n, year_from, open_access, None),
         ]
 
     results = await asyncio.gather(*coros, return_exceptions=True)
@@ -556,6 +595,7 @@ async def search_all(
             p["study_type"] = _classify_study_type(
                 p.get("title", ""), p.get("abstract", "")
             )
+        p["evidence_flags"] = _paper_flags(p)
 
     deduped = _dedupe(combined)
 
@@ -571,7 +611,7 @@ async def search_all(
             allowed = {wanted}
         deduped = [p for p in deduped if (p.get("study_type") or "").lower() in allowed]
 
-    ranked = _rank_by_evidence(deduped, q)
+    ranked = _rank_by_evidence(deduped, search_q)
 
     # Evidence quality summary for frontend warnings
     types = [p.get("study_type") or "" for p in ranked]
@@ -586,7 +626,8 @@ async def search_all(
     }
 
     response = {"results": ranked, "total": len(ranked), "query": q,
-                "sources_used": list(requested), "evidence_summary": evidence_summary}
+                "sources_used": list(requested), "pico_query": search_q if search_q != q else "",
+                "evidence_summary": evidence_summary}
     _cache_set(_search_cache, cache_key, response)
     return response
 
@@ -822,10 +863,15 @@ async def _pubmed_search(q, n=5, year_from=None, free_only=False, humans=False):
                 if eid.get("IdType")=="doi": doi = eid.text or ""
             pub_types = [pt.text for pt in article.findall(".//PublicationType") if pt.text]
             badge = next((pt for pt in pub_types if pt in (
-                "Randomized Controlled Trial","Systematic Review","Meta-Analysis","Clinical Trial","Review"
+                "Randomized Controlled Trial","Systematic Review","Meta-Analysis","Clinical Trial","Review",
+                "Practice Guideline", "Guideline", "Retracted Publication", "Expression of Concern"
             )), "")
+            retracted = any(pt in {"Retracted Publication", "Retraction of Publication"} for pt in pub_types)
+            concern = any(pt == "Expression of Concern" for pt in pub_types)
             results.append({"id":pmid,"title":title,"authors":authors,"year":year,"journal":journal,
                            "abstract":abstract,"doi":doi,"pmid":pmid,"badge":badge,
+                           "publication_types": pub_types, "retracted": retracted,
+                           "expression_of_concern": concern,
                            "url":f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/","source":"PubMed"})
         return results
     except Exception as e:
@@ -928,15 +974,15 @@ def _dedupe(papers: list) -> list:
             continue
         if pmid and pmid in seen_pmid:
             continue
-        if title_key and len(title_key) > 20 and title_key in seen_title:
+        if title_key and len(title_key) >= 16 and title_key in seen_title:
             continue
-        if title_year_key and len(title_key) > 20 and title_year_key in seen_title_year:
+        if title_year_key and len(title_key) >= 16 and title_year_key in seen_title_year:
             continue
         if doi:
             seen_doi.add(doi)
         if pmid:
             seen_pmid.add(pmid)
-        if title_key and len(title_key) > 20:
+        if title_key and len(title_key) >= 16:
             seen_title.add(title_key)
             seen_title_year.add(title_year_key)
         out.append(p)
@@ -1790,6 +1836,8 @@ async def chat_stream(req: ChatRequest, request: Request):
                 return
             except Exception as e:
                 logger.warning(f"Gemini stream error: {e}")
+                if "429" in str(e) or "Too Many Requests" in str(e):
+                    yield f"data: {json.dumps({'error': 'provider_rate_limit', 'provider': 'gemini', 'message': 'Gemini is rate-limited; trying fallback provider.'})}\n\n"
 
         if GROQ_API_KEY:
             try:
@@ -1799,6 +1847,8 @@ async def chat_stream(req: ChatRequest, request: Request):
                 return
             except Exception as e:
                 logger.warning(f"Groq stream error: {e}")
+                if "429" in str(e) or "Too Many Requests" in str(e):
+                    yield f"data: {json.dumps({'error': 'provider_rate_limit', 'provider': 'groq', 'message': 'Groq is rate-limited right now.'})}\n\n"
 
         yield f"data: {json.dumps({'error': 'No AI provider available'})}\n\n"
         yield "data: [DONE]\n\n"
@@ -1824,6 +1874,7 @@ async def _stream_gemini(messages: list, key: str):
                 "generationConfig": {"maxOutputTokens": 2048, "temperature": 0.3}
             }
         ) as r:
+            r.raise_for_status()
             async for line in r.aiter_lines():
                 if line.startswith("data: "):
                     try:
@@ -1845,6 +1896,7 @@ async def _stream_groq(messages: list, key: str):
             json={"model": "llama-3.3-70b-versatile", "messages": messages,
                   "max_tokens": 2048, "temperature": 0.3, "stream": True}
         ) as r:
+            r.raise_for_status()
             async for line in r.aiter_lines():
                 if line.startswith("data: ") and "[DONE]" not in line:
                     try:
@@ -1861,25 +1913,32 @@ async def _stream_groq(messages: list, key: str):
 async def check_retraction(doi: str = "", pmid: str = ""):
     """Check if a paper has been retracted via CrossRef and PubMed."""
     retracted = False
+    expression_of_concern = False
     reason = ""
     source = ""
 
     if doi:
         try:
+            doi_clean = doi.strip().removeprefix("https://doi.org/").removeprefix("http://doi.org/")
             async with httpx.AsyncClient(timeout=10) as client:
                 r = await client.get(
-                    f"https://api.crossref.org/works/{doi.lstrip('https://doi.org/')}",
+                    f"https://api.crossref.org/works/{doi_clean}",
                     headers={"User-Agent": f"ClinSearch/3.0 (mailto:{PUBMED_EMAIL})"}
                 )
                 if r.status_code == 200:
                     data = r.json().get("message", {})
                     updates = data.get("update-to", []) or []
                     for upd in updates:
-                        if "retract" in upd.get("type", "").lower():
+                        upd_type = upd.get("type", "").lower()
+                        if "retract" in upd_type or "withdraw" in upd_type:
                             retracted = True
                             reason = "Retraction notice found in CrossRef"
                             source = "CrossRef"
                             break
+                        if "concern" in upd_type:
+                            expression_of_concern = True
+                            reason = "Expression of concern found in CrossRef"
+                            source = "CrossRef"
                     if not retracted and "retract" in str(data.get("title", "")).lower():
                         retracted = True
                         reason = "Title indicates retraction"
@@ -1901,10 +1960,15 @@ async def check_retraction(doi: str = "", pmid: str = ""):
                         retracted = True
                         reason = "Retraction notice found in PubMed record"
                         source = "PubMed"
+                    elif "ExpressionOfConcern" in xml or "expression of concern" in xml.lower()[:3000]:
+                        expression_of_concern = True
+                        reason = "Expression of concern found in PubMed record"
+                        source = "PubMed"
         except Exception as e:
             logger.warning(f"PubMed retraction check error: {e}")
 
-    return {"retracted": retracted, "reason": reason, "source": source,
+    return {"retracted": retracted, "expression_of_concern": expression_of_concern,
+            "reason": reason, "source": source,
             "doi": doi, "pmid": pmid}
 
 

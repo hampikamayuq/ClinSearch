@@ -218,6 +218,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .pico-letter{font-family:var(--mono);font-size:1.1rem;font-weight:500;color:var(--accent);margin-bottom:.2rem}
 .pico-lbl{font-size:.63rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.28rem}
 .pico-val{font-size:.79rem;line-height:1.5}
+.pico-fields{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.4rem;width:100%}
+.pico-fields input{width:100%;background:var(--bg);border:1px solid var(--b1);border-radius:6px;color:var(--txt);font-size:.72rem;padding:.34rem .45rem;outline:none}
+.pico-fields input:focus{border-color:var(--accent)}
+@media(max-width:760px){.pico-fields{grid-template-columns:1fr 1fr}}
+@media(max-width:440px){.pico-fields{grid-template-columns:1fr}}
 
 /* GRADE visual */
 .grade-visual{background:var(--bg);border:1px solid var(--b1);border-radius:8px;padding:.85rem;margin:.55rem 0}
@@ -898,6 +903,15 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 	            <span class="filter-chip" id="oaOnlyChip" onclick="this.classList.toggle('on')">🔓 Open Access only</span>
 	            <span class="filter-chip" id="humansOnlyChip" onclick="this.classList.toggle('on')">Human studies</span>
 	          </div>
+	          <div class="filter-row">
+	            <span class="filter-label">PICO</span>
+	            <div class="pico-fields">
+	              <input id="picoPatient" placeholder="P: patient/problem">
+	              <input id="picoIntervention" placeholder="I: intervention">
+	              <input id="picoComparator" placeholder="C: comparator">
+	              <input id="picoOutcome" placeholder="O: outcome">
+	            </div>
+	          </div>
         </div>
       </div>
     </div>
@@ -1221,10 +1235,16 @@ function getActiveFilters() {
   const studyType = (studyChip?.dataset.f === 'all' || !studyChip) ? '' : (studyChip?.dataset.f || '');
   const oaOnly = document.getElementById('oaOnlyChip')?.classList.contains('on') || false;
   const humansOnly = document.getElementById('humansOnlyChip')?.classList.contains('on') || false;
-  const pico = chips.includes('pico');
+  const picoFields = {
+    patient: document.getElementById('picoPatient')?.value.trim() || '',
+    intervention: document.getElementById('picoIntervention')?.value.trim() || '',
+    comparator: document.getElementById('picoComparator')?.value.trim() || '',
+    outcome: document.getElementById('picoOutcome')?.value.trim() || ''
+  };
+  const pico = chips.includes('pico') || Object.values(picoFields).some(Boolean);
   const yearFrom = parseInt(document.getElementById('yearFrom')?.value || 0) || null;
   const yearTo = parseInt(document.getElementById('yearTo')?.value || 0) || null;
-  return {srcs: srcs.length ? srcs : ['pubmed','s2','openalex'], studyType, oaOnly, humansOnly, pico, yearFrom, yearTo};
+  return {srcs: srcs.length ? srcs : ['pubmed','s2','openalex'], studyType, oaOnly, humansOnly, pico, picoFields, yearFrom, yearTo};
 }
 
 function setLastFiveYears() {
@@ -1259,13 +1279,17 @@ function buildCardHtml(p) {
   const isPreprint = /medrxiv|biorxiv|preprint/i.test(`${src} ${p.server||''} ${url}`);
   const isRetracted = /retracted|retraction notice|withdrawn/i.test(`${p.title||''} ${abs}`);
   const weakType = ['Observational','Cohort','Case Report','Preprint',''].includes(studyType);
-  const warn = isRetracted
+  const apiFlags = (p.evidence_flags||[]).map(f=>{
+    const cls = f.level === 'danger' ? ' red' : '';
+    return `<div class="e-warn${cls}">${esc(f.label||f.type||'Evidence warning')}</div>`;
+  }).join('');
+  const warn = apiFlags || (isRetracted
     ? '<div class="e-warn red">Retracted or withdrawn signal detected. Do not use this as practice-changing evidence without verification.</div>'
     : isPreprint
     ? '<div class="e-warn red">Preprint: not peer reviewed. Treat conclusions as provisional.</div>'
     : weakType
       ? `<div class="e-warn">Lower-certainty evidence${studyType?`: ${studyType}`:''}. Check confounding, bias, and applicability before changing practice.</div>`
-      : '';
+      : '');
   return {cardId, html: `<div class="r-card" id="${cardId}">
     <div class="r-top">
       <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
@@ -1357,6 +1381,9 @@ async function searchMode(query, appendToExisting) {
     if(filters.oaOnly) url += '&open_access=true';
     if(filters.humansOnly) url += '&humans=true';
     if(filters.pico) url += '&pico=true';
+    for(const [k,v] of Object.entries(filters.picoFields||{})) {
+      if(v) url += `&${k}=${encodeURIComponent(v)}`;
+    }
     if(filters.yearFrom) url += `&year_from=${filters.yearFrom}`;
     if(filters.yearTo && filters.yearTo < new Date().getFullYear()) url += `&year_to=${filters.yearTo}`;
     if(filters.studyType) url += `&study_type=${encodeURIComponent(filters.studyType)}`;
@@ -1812,11 +1839,12 @@ async function fetchSearchContext(query) {
   try {
     const r = await fetch(`${API}/api/search?q=${encodeURIComponent(query)}&n=5`);
     const d = await r.json();
-    if(!d.results?.length) return '';
-    let ctx = '\n\n[REAL PAPERS RETRIEVED — cite every claim using [N] and format as markdown link [Title](URL). Do NOT invent additional papers.]\n';
+    if(!d.results?.length) return '\n\n[NO REAL PAPERS RETRIEVED. State clearly that evidence is insufficient. Do not invent citations or paper details.]\n';
+    let ctx = '\n\n[REAL PAPERS RETRIEVED — cite every factual claim as [[N] Author, Year](URL). Do NOT invent additional papers. If data are missing, write NR.]\n';
     d.results.slice(0,8).forEach((p,i) => {
       const authors = (p.authors||[]).slice(0,3).join(', ');
-      ctx += `\n[${i+1}] "${p.title}" — URL: ${p.url||''}\n    Authors: ${authors} | Year: ${p.year||''} | Journal: ${p.journal||''} | Citations: ${p.citations||''}\n    Abstract: ${(p.abstract||'').slice(0,600)}\n`;
+      const idLine = [p.pmid?`PMID:${p.pmid}`:'', p.doi?`DOI:${p.doi}`:'', p.url||''].filter(Boolean).join(' | ');
+      ctx += `\n[${i+1}] "${p.title}" — ${idLine}\n    Authors: ${authors} | Year: ${p.year||''} | Journal: ${p.journal||''} | Study type: ${p.study_type||''} | Citations: ${p.citations||''}\n    Abstract: ${(p.abstract||'').slice(0,600)}\n`;
     });
     return ctx;
   } catch(e) { return ''; }
@@ -1897,6 +1925,7 @@ function buildSystemPrompt() {
 ## CORE RULES
 - When real papers are provided in context, cite EVERY factual claim with [1], [2] etc. using their ACTUAL data — never invent studies.
 - Format each citation as a markdown link using the paper's URL: **[[1] Author et al., Year](URL)** — this creates a clickable link.
+- If no real papers are provided or retrieved for an evidence question, clearly state that evidence is insufficient and do not provide paper-specific claims.
 - Extract from each paper: study design, N, primary endpoint, effect size (OR/RR/HR/MD), 95% CI, p-value, NNT/NNH, follow-up, limitations.
 - Compare and contrast findings across studies. Highlight heterogeneity and contradictions.
 - Flag areas of active controversy or insufficient evidence.

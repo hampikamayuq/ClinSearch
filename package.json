@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "check:js": "awk '/<script>/{flag=1;next}/<\\/script>/{flag=0}flag' frontend/index.html > /tmp/clinsearch-inline.js && node --check /tmp/clinsearch-inline.js && node -e \"const fs=require('fs'); const acorn=require('acorn'); const src=fs.readFileSync('/tmp/clinsearch-inline.js','utf8'); acorn.parse(src,{ecmaVersion:'latest'}); console.log('JS parse ok')\"",
-    "test": "npm run check:js"
+    "check:py": "python3 -m py_compile backend/main.py && python3 tests/test_core.py",
+    "test": "npm run check:js && npm run check:py"
   },
   "repository": {
     "type": "git",
