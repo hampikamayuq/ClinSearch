@@ -1111,6 +1111,7 @@ async function searchMode(query) {
       <button class="act-btn" onclick="showSampleSize(window._srchPapers,window._srchQuery)">🧮 Sample Size</button>
       <button class="act-btn" onclick="openSRScreen(window._srchPapers)">📋 Screen Papers</button>
       <button class="act-btn" onclick="showContradictions(window._srchPapers,window._srchQuery)">⚡ Contradictions</button>
+      <button class="act-btn" onclick="saveSearchAlert(window._srchQuery)" style="border-color:rgba(0,212,170,.3)">🔔 Save Alert</button>
     `;
     window._srchPapers=papers; window._srchQuery=query;
     document.getElementById('msgs').appendChild(actBar);
@@ -1158,6 +1159,7 @@ async function searchMode(query) {
           <button class="rbtn" onclick='showStatsCritic(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>📐 Stats</button>
           <button class="rbtn" onclick='showCMEQuestions([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], "${esc(p.title||'')}")'>📚 CME</button>
           ${pmid?`<button class="rbtn" onclick="showCitationGraph('${pmid}','')">🕸 Citations</button>`:(doi?`<button class="rbtn" onclick="showCitationGraph('','${doi}')">🕸 Citations</button>`:'')}
+          ${(p.url||doi)?`<button class="rbtn" onclick="analyzePDF('${esc(p.url||'')}','${doi}','${esc(p.title||'')}')">📄 AI Read</button>`:''}
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -1516,6 +1518,39 @@ async function demoReply(text) {
   S.history.push({role:'assistant',content:'[demo response]'});
 }
 
+// ── PDF Analyzer ──────────────────────────────────────────────────────────────
+async function analyzePDF(url, doi, title) {
+  const targetUrl = url || (doi ? `https://doi.org/${doi}` : '');
+  if(!targetUrl) { showAlert('No URL available for this paper'); return; }
+  const resultEl = addToolPanel(`📄 AI Full Read — ${title.slice(0,55)}…`);
+  resultEl.innerHTML = `<div style="color:var(--muted);font-size:.82rem">⏳ Fetching and analyzing full text…</div>`;
+  try {
+    const r = await fetch(`${API}/api/pdf-analyze`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({url:targetUrl, session_token:S.session||''})
+    });
+    const d = await r.json();
+    if(d.error) throw new Error(d.error);
+    resultEl.innerHTML = mdToHtml(d.analysis || 'No analysis available');
+    injectSaveButtons(resultEl);
+  } catch(e) { resultEl.innerHTML = `<span style="color:#ff5050">⚠️ ${e.message}</span>`; }
+}
+
+// ── Search Alerts ─────────────────────────────────────────────────────────────
+async function saveSearchAlert(query) {
+  if(!query) return;
+  if(!S.session) { showAlert('Sign in to save alerts'); return; }
+  try {
+    const r = await fetch(`${API}/api/alerts`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({session_token:S.session, query})
+    });
+    const d = await r.json();
+    if(d.id) showAlert(`🔔 Alert saved — you'll be notified of new papers on "${query.slice(0,30)}"`);
+    else showAlert('⚠️ Could not save alert');
+  } catch(e) { showAlert('⚠️ ' + e.message); }
+}
+
 // ── Workspace ──────────────────────────────────────────────────────────────────
 function saveToWorkspace(paper) { savePaper(paper, null); }
 function savePaper(paper, btn) {
@@ -1528,6 +1563,13 @@ function savePaper(paper, btn) {
     showAlert('💾 Saved: '+paper.title.slice(0,40)+'…');
     if(btn){btn.textContent='✓ Saved';btn.disabled=true;btn.className='rbtn';}
     document.getElementById('workspace').classList.add('open');
+    // Sync to server if logged in
+    if(S.session) {
+      fetch(`${API}/api/workspace`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({session_token:S.session, paper, folder:'default'})
+      }).catch(()=>{});
+    }
   }
 }
 
