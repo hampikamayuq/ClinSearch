@@ -279,8 +279,8 @@ async def _inject_search_context(messages: list) -> list:
         return messages
     try:
         results = await asyncio.gather(
-            _pubmed_search(last_user, 4),
-            _s2_search(last_user, 3),
+            _pubmed_search(last_user, 6),
+            _s2_search(last_user, 5),
             return_exceptions=True
         )
         papers = []
@@ -289,12 +289,13 @@ async def _inject_search_context(messages: list) -> list:
                 papers.extend(r)
         if not papers:
             return messages
-        context = "\n\n[REAL PAPERS RETRIEVED — cite these in your response, do not invent papers]\n"
-        for i, p in enumerate(papers[:6], 1):
-            authors = ", ".join((p.get("authors") or [])[:2])
+        context = "\n\n[REAL PAPERS RETRIEVED — you MUST cite these using [1],[2] etc. and extract their actual data: study design, N, effect sizes, CI, p-values, NNT. Do NOT invent additional papers.]\n"
+        for i, p in enumerate(papers[:9], 1):
+            authors = ", ".join((p.get("authors") or [])[:3])
+            abstract = (p.get('abstract') or '')[:700]
             context += (f"\n[{i}] \"{p['title']}\"\n"
-                       f"    Authors: {authors} | Year: {p.get('year','')} | Journal: {p.get('journal','')}\n"
-                       f"    Abstract: {(p.get('abstract') or '')[:350]}\n"
+                       f"    Authors: {authors} | Year: {p.get('year','')} | Journal: {p.get('journal','')} | Citations: {p.get('citations','')}\n"
+                       f"    Abstract: {abstract}\n"
                        f"    URL: {p.get('url','')}\n")
         enriched = []
         for m in messages:
