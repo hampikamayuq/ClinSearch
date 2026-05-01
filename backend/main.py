@@ -1224,6 +1224,295 @@ Return a JSON object with this EXACT structure (no markdown, just JSON):
   }}
 }}
 If exact data is not available, estimate from the abstract. Ensure effect and CIs are numeric."""
+    elif req.tool == "drug_interaction":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:8], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} — {(p.get('abstract','') or '')[:300]}"
+        drugs = req.query or "drugs mentioned in papers"
+        fda_ctx = ""
+        if req.query:
+            try:
+                drug_term = req.query.split()[0]
+                async with httpx.AsyncClient(timeout=8) as client:
+                    r = await client.get(
+                        "https://api.fda.gov/drug/event.json",
+                        params={"search": f"patient.drug.medicinalproduct:{drug_term}", "limit": 3}
+                    )
+                    if r.status_code == 200:
+                        results = r.json().get("results", [])[:2]
+                        fda_ctx = f"\nOpenFDA sample data: {json.dumps(results)[:600]}"
+            except Exception:
+                pass
+
+        prompt = f"""You are a clinical pharmacologist. Analyze drug interactions for: {drugs}
+
+Papers:{papers_ctx}{fda_ctx}
+
+## 💊 Drugs Identified
+List all drugs/interventions mentioned in the papers.
+
+## ⚠️ Key Drug-Drug Interactions
+| Drug A | Drug B | Mechanism | Severity | Management |
+|--------|--------|-----------|----------|-----------|
+
+## 🔴 Absolute Contraindications
+Combinations to never use and why.
+
+## 🟡 Use With Caution
+Dose adjustments or enhanced monitoring required.
+
+## 📊 Special Populations
+| Population | Key Consideration |
+|-----------|------------------|
+| Renal impairment (CrCl<30) | |
+| Hepatic impairment | |
+| Elderly (>65) | |
+| Pregnancy/lactation | |
+
+## 💡 Clinical Pearls
+Key prescribing safety tips."""
+
+    elif req.tool == "guidelines":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:5], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')})"
+        topic = req.query or "the topic"
+        prompt = f"""You are a medical guidelines expert. Summarize clinical practice guidelines for: {topic}
+
+Papers context:{papers_ctx}
+
+## 📋 Major Guidelines at a Glance
+| Organization | Year | Key Recommendation | Evidence Grade |
+|-------------|------|--------------------|---------------|
+
+## 🎯 First-Line Treatment Algorithm
+Step-by-step clinical pathway based on current guidelines.
+
+## 🔄 Escalation Criteria
+Specific thresholds/triggers to move to next-line therapy.
+
+## 🔬 Evidence vs Guidelines Gaps
+Where current trial evidence differs from guideline recommendations.
+
+## 📅 Recent Updates (Last 2 Years)
+New or changed recommendations with rationale.
+
+## 🌍 Regional Differences
+Where NICE / AHA / ESC / ESMO / WHO recommendations diverge and why."""
+
+    elif req.tool == "case_simulator":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:8], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:350]}"
+        case = req.query or "No case provided"
+        prompt = f"""You are a senior clinician providing evidence-based clinical decision support.
+
+CLINICAL CASE:
+{case}
+
+EVIDENCE BASE:{papers_ctx}
+
+## 🏥 Case Analysis
+- Key clinical features and significance
+- Working diagnosis
+- Risk stratification
+
+## 🔍 Most Relevant Evidence
+Which papers best apply to this patient and why?
+
+## 💊 Recommended Treatment Plan
+Tailored to THIS patient's profile:
+- **First-line:** [drug, dose, frequency, duration]
+- **If fails/contraindicated:** [alternative]
+- **Monitoring:** [parameters and frequency]
+
+## ⚠️ Red Flags & Contraindications
+Specific concerns for this patient.
+
+## 📊 Expected Outcomes
+Based on trial data: response rates and NNT for this patient type.
+
+## 🔄 Follow-up Plan
+Timeline and decision points.
+
+## ❓ Evidence Gaps
+What data is lacking for this exact patient profile?"""
+
+    elif req.tool == "dosing":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:10], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:350]}"
+        drug = req.query or "drugs in these papers"
+        prompt = f"""You are a clinical pharmacologist. Extract and synthesize dosing information for: {drug}
+
+Papers:{papers_ctx}
+
+## 💊 Dosing Summary
+| Drug | Indication | Dose | Frequency | Route | Duration | Trial Source |
+|------|-----------|------|-----------|-------|----------|-------------|
+
+## 📈 Dose-Response Data
+What trials showed about different doses (if dose-ranging data available).
+
+## ⚙️ Special Population Dosing
+| Population | Standard Dose | Adjusted Dose | Rationale |
+|-----------|--------------|--------------|-----------|
+| Renal impairment (CrCl <30) | | | |
+| Hepatic impairment (Child-Pugh B/C) | | | |
+| Elderly (>65 years) | | | |
+| Pediatric (<18 years) | | | |
+| Obesity (BMI >30) | | | |
+
+## ⚠️ Dose Modification for Toxicity
+When to reduce, hold, or discontinue.
+
+## 💡 Practical Administration Tips
+Loading doses, titration schedules, food interactions, timing pearls."""
+
+    elif req.tool == "audio_summary":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:6], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:350]}"
+        topic = req.query or "the provided research"
+        prompt = f"""You are a medical podcaster. Write a 5-minute audio script (~750 words) on: {topic}
+
+Research base:{papers_ctx}
+
+Write in conversational spoken style — NO bullet points, flowing prose only:
+
+[INTRO - 30 sec]
+Open with a compelling clinical scenario or striking statistic. Introduce the topic.
+
+[BACKGROUND - 60 sec]
+Why this matters. What was missing before this research.
+
+[THE EVIDENCE - 2 min]
+Walk through key studies in storytelling format. Use phrases like "researchers found that...", "what's remarkable is...", "here's the twist...". Cite specific numbers.
+
+[CLINICAL IMPLICATIONS - 90 sec]
+"So what does this mean for your patients..." Practical takeaways.
+
+[BOTTOM LINE - 30 sec]
+Three numbered take-home messages.
+
+[OUTRO]
+Brief sign-off.
+
+Write naturally as if speaking. Use pauses (...) and smooth transitions."""
+
+    elif req.tool == "slides":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:8], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:250]}"
+        topic = req.query or "the provided research"
+        prompt = f"""You are a medical educator. Create a 15-slide presentation outline on: {topic}
+
+Papers:{papers_ctx}
+
+For EACH slide provide:
+### Slide N: [Title]
+**Key message:** one sentence
+**Bullets:**
+- point 1
+- point 2
+- point 3
+**Visual:** chart/table/diagram description
+**Speaker notes:** 2-3 sentences to say aloud
+
+Slide structure:
+- Slide 1: Title + learning objectives
+- Slide 2: Epidemiology / burden of disease
+- Slides 3-4: Pathophysiology
+- Slides 5-9: Key evidence (one landmark study per slide)
+- Slides 10-11: Evidence synthesis / meta-analysis
+- Slides 12-13: Clinical implications and guidelines
+- Slide 14: Controversies and limitations
+- Slide 15: Take-home messages"""
+
+    elif req.tool == "pico":
+        paper = (req.papers or [{}])[0]
+        title = paper.get("title", req.query or "")
+        abstract = (paper.get("abstract", "") or "")[:2000]
+        prompt = f"""Extract the full PICO framework from this medical paper.
+
+Title: {title}
+Abstract: {abstract}
+
+## Population (P)
+- **Inclusion criteria:** age, diagnosis, severity, prior treatments
+- **Exclusion criteria:** key exclusions
+- **N =** [sample size]
+- **Setting:** inpatient/outpatient, country, years
+
+## Intervention (I)
+- **Treatment:** name, dose, frequency, route, duration
+- **Co-interventions:** background therapy allowed
+
+## Comparison (C)
+- **Control:** placebo / active comparator / usual care
+- **Dose and duration of comparator**
+
+## Outcomes (O)
+### Primary Outcome
+| Measure | Timepoint | Result | 95% CI | p-value | NNT |
+|---------|-----------|--------|--------|---------|-----|
+
+### Key Secondary Outcomes
+| Outcome | Result | p-value |
+|---------|--------|---------|
+
+## Study Design
+- **Type:** RCT / cohort / case-control / SR / meta-analysis
+- **Blinding:** double-blind / single-blind / open-label
+- **Follow-up duration:**
+- **Risk of bias:** low / moderate / high + key concerns
+
+## GRADE Certainty
+Level: High / Moderate / Low / Very Low
+**Rationale:** why this GRADE level?"""
+
+    elif req.tool == "translation":
+        paper = (req.papers or [{}])[0]
+        title = paper.get("title", req.query or "")
+        abstract = (paper.get("abstract", "") or "")[:2000]
+        lang = paper.get("_lang", "Portuguese (Brazilian)")
+        prompt = f"""Translate and adapt this medical research for patients. Write entirely in {lang}.
+
+Paper: {title}
+Abstract: {abstract}
+
+Create a patient-friendly summary (no jargon, 8th-grade reading level):
+
+## O que foi pesquisado
+(2-3 simple sentences about the question studied)
+
+## Como foi feito
+(Simple description of how the study worked)
+
+## O que encontraram
+(Key results — use "X em cada 10 pacientes" style, avoid percentages and statistics)
+
+## O que isso significa para você
+(Practical implications — should patients discuss this with their doctor?)
+
+## Perguntas para fazer ao seu médico
+1.
+2.
+3.
+4.
+5.
+
+## Limitações importantes
+(Why results might not apply to everyone, in simple terms)
+
+Write entirely in {lang}. Use simple vocabulary. No medical abbreviations."""
+
     else:
         raise HTTPException(400, "Unknown tool")
 

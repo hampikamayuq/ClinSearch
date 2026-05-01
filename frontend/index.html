@@ -409,6 +409,49 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
   </div>
 </div>
 
+<!-- Case Simulator Modal -->
+<div class="overlay" id="caseModal" onclick="if(event.target===this)closeCaseModal()">
+  <div class="modal" style="max-width:520px">
+    <h3>🏥 Case Simulator</h3>
+    <p class="modal-sub">Describe the clinical case — the AI will match it against the current search evidence.</p>
+    <label class="mlbl">Patient / Clinical Case</label>
+    <textarea id="caseInput" class="minp" rows="5" style="resize:vertical;font-size:.82rem;line-height:1.5" placeholder="e.g. 34yo female with moderate-severe atopic dermatitis, failed topical steroids and cyclosporine, no prior biologics. Baseline EASI 28. No significant comorbidities."></textarea>
+    <label class="mlbl" style="margin-top:.6rem">Target language for output</label>
+    <select id="caseLang" class="minp" style="font-size:.82rem">
+      <option value="English">English</option>
+      <option value="Portuguese (Brazilian)">Português (BR)</option>
+      <option value="Spanish">Español</option>
+    </select>
+    <div class="mbtns">
+      <button class="mbtn mbtn-c" onclick="closeCaseModal()">Cancel</button>
+      <button class="mbtn mbtn-s" onclick="runCaseSimulator()">Run Analysis →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Translation Modal -->
+<div class="overlay" id="translateModal" onclick="if(event.target===this)closeTranslateModal()">
+  <div class="modal" style="max-width:420px">
+    <h3>🌐 Translate for Patient</h3>
+    <p class="modal-sub">Generate a plain-language patient summary in another language.</p>
+    <label class="mlbl">Language</label>
+    <select id="translateLang" class="minp" style="font-size:.82rem">
+      <option value="Portuguese (Brazilian)">Português (BR)</option>
+      <option value="Spanish">Español</option>
+      <option value="English">English</option>
+      <option value="French">Français</option>
+      <option value="German">Deutsch</option>
+      <option value="Italian">Italiano</option>
+      <option value="Mandarin Chinese">中文 (Mandarin)</option>
+      <option value="Arabic">العربية</option>
+    </select>
+    <div class="mbtns">
+      <button class="mbtn mbtn-c" onclick="closeTranslateModal()">Cancel</button>
+      <button class="mbtn mbtn-s" onclick="runTranslation()">Translate →</button>
+    </div>
+  </div>
+</div>
+
 <!-- Sidebar overlay (mobile) -->
 <div class="lsb-overlay" id="lsbOverlay" onclick="closeSidebar()"></div>
 
@@ -870,9 +913,15 @@ async function searchMode(query) {
     const actBar=document.createElement('div');actBar.className='srch-actions';
     const _q=query,_p=papers;
     actBar.innerHTML=`
-      <button class="act-btn" onclick="showGapAnalysis(window._srchPapers,window._srchQuery)">🗺 Research Gaps</button>
+      <button class="act-btn" onclick="showGapAnalysis(window._srchPapers,window._srchQuery)">🗺 Gaps</button>
       <button class="act-btn" onclick="showHeadToHead(window._srchPapers,window._srchQuery)">⚖️ Head-to-Head</button>
       <button class="act-btn" onclick="showForestPlot(window._srchPapers,window._srchQuery)">🌲 Forest Plot</button>
+      <button class="act-btn" onclick="showGuidelines(window._srchPapers,window._srchQuery)">📋 Guidelines</button>
+      <button class="act-btn" onclick="showDosing(window._srchPapers,window._srchQuery)">💊 Dosing</button>
+      <button class="act-btn" onclick="showDrugInteraction(window._srchPapers,window._srchQuery)">⚠️ Interactions</button>
+      <button class="act-btn" onclick="showAudioSummary(window._srchPapers,window._srchQuery)">🎙 Audio</button>
+      <button class="act-btn" onclick="showSlides(window._srchPapers,window._srchQuery)">🖥 Slides</button>
+      <button class="act-btn" onclick="openCaseSimulator()">🏥 Case Sim</button>
     `;
     window._srchPapers=papers; window._srchQuery=query;
     document.getElementById('msgs').appendChild(actBar);
@@ -913,6 +962,9 @@ async function searchMode(query) {
           ${pmid?`<button class="rbtn" onclick="readFulltext('${pmid}','${doi}','${esc(p.title||'')}')">📖 Read</button>`:''}
           <button class="rbtn" onclick='showJournalClub("${pmid}","${doi}","${esc(p.title||'')}")'>📋 Journal Club</button>
           <button class="rbtn" onclick='showPatientSummary(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>👤 Patient</button>
+          <button class="rbtn" onclick='showPICO(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>🔬 PICO</button>
+          <button class="rbtn" onclick='showDrugInteraction([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], "${esc(p.title||'')}")'>💊 Interactions</button>
+          <button class="rbtn" onclick='showTranslation(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>🌐 Translate</button>
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -1710,6 +1762,74 @@ async function checkRetraction(doi, pmid, badgeEl) {
       badgeEl.innerHTML+=' <span class="badge-ret">⚠️ RETRACTED</span>';
     }
   } catch(e){}
+}
+
+// ── Sprint 3 Tools ────────────────────────────────────────────────────────────
+async function showGuidelines(papers, query) {
+  const resultEl=addToolPanel(`📋 Clinical Guidelines — "${query}"`);
+  await runAITool('guidelines',{papers,query},resultEl);
+}
+
+async function showDosing(papers, query) {
+  const resultEl=addToolPanel(`💊 Dosing Guide — "${query}"`);
+  await runAITool('dosing',{papers,query},resultEl);
+}
+
+async function showDrugInteraction(papers, query) {
+  const resultEl=addToolPanel(`⚠️ Drug Interactions — "${(query||'').slice(0,50)}"`);
+  await runAITool('drug_interaction',{papers,query},resultEl);
+}
+
+async function showAudioSummary(papers, query) {
+  const resultEl=addToolPanel(`🎙 Audio Script — "${query}"`);
+  await runAITool('audio_summary',{papers,query},resultEl);
+}
+
+async function showSlides(papers, query) {
+  const resultEl=addToolPanel(`🖥 Slide Deck — "${query}"`);
+  await runAITool('slides',{papers,query},resultEl);
+}
+
+async function showPICO(paper) {
+  const resultEl=addToolPanel(`🔬 PICO — ${(paper.title||'').slice(0,55)}…`);
+  await runAITool('pico',{papers:[paper],query:paper.title||''},resultEl);
+}
+
+// Case Simulator modal state
+let _caseModalPaper=null;
+function openCaseSimulator() {
+  document.getElementById('caseModal').classList.add('open');
+  document.getElementById('caseInput').focus();
+}
+function closeCaseModal() {
+  document.getElementById('caseModal').classList.remove('open');
+}
+async function runCaseSimulator() {
+  const caseText=document.getElementById('caseInput').value.trim();
+  if(!caseText){document.getElementById('caseInput').focus();return;}
+  closeCaseModal();
+  const papers=window._srchPapers||[];
+  const resultEl=addToolPanel('🏥 Case Simulator');
+  await runAITool('case_simulator',{papers,query:caseText},resultEl);
+}
+
+// Translation modal state
+let _translatePaper=null;
+function showTranslation(paper) {
+  _translatePaper=paper;
+  document.getElementById('translateModal').classList.add('open');
+}
+function closeTranslateModal() {
+  document.getElementById('translateModal').classList.remove('open');
+  _translatePaper=null;
+}
+async function runTranslation() {
+  const lang=document.getElementById('translateLang').value;
+  closeTranslateModal();
+  if(!_translatePaper) return;
+  const paper=Object.assign({},_translatePaper,{_lang:lang});
+  const resultEl=addToolPanel(`🌐 ${lang} — ${(_translatePaper.title||'').slice(0,45)}…`);
+  await runAITool('translation',{papers:[paper],query:lang},resultEl);
 }
 
 // ── Alert ──────────────────────────────────────────────────────────────────────
