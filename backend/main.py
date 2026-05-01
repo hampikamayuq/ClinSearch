@@ -1900,6 +1900,53 @@ Level: High / Moderate / Low / Very Low
         abstract = (paper.get("abstract", "") or "")[:2000]
         study_type = "RCT" if any(w in (title+abstract).lower() for w in ["randomiz","randomis","rct","placebo","double-blind"]) else "observational"
         tool_name = "RoB 2.0 (Cochrane)" if study_type == "RCT" else "ROBINS-I"
+        rct_domains = """### Domain 1: Randomisation process
+- Judgement: Low / Some concerns / High
+- Rationale:
+
+### Domain 2: Deviations from intended interventions
+- Judgement:
+- Rationale:
+
+### Domain 3: Missing outcome data
+- Judgement:
+- Rationale:
+
+### Domain 4: Measurement of the outcome
+- Judgement:
+- Rationale:
+
+### Domain 5: Selection of the reported result
+- Judgement:
+- Rationale:"""
+        observational_domains = """### Domain 1: Bias due to confounding
+- Judgement: Low / Moderate / Serious / Critical
+- Rationale:
+
+### Domain 2: Bias in selection of participants
+- Judgement:
+- Rationale:
+
+### Domain 3: Bias in classification of interventions
+- Judgement:
+- Rationale:
+
+### Domain 4: Bias due to deviations from intended interventions
+- Judgement:
+- Rationale:
+
+### Domain 5: Bias due to missing data
+- Judgement:
+- Rationale:
+
+### Domain 6: Bias in measurement of outcomes
+- Judgement:
+- Rationale:
+
+### Domain 7: Bias in selection of the reported result
+- Judgement:
+- Rationale:"""
+        rob_domains = rct_domains if study_type == "RCT" else observational_domains
         prompt = f"""You are a systematic reviewer performing a {tool_name} risk of bias assessment.
 
 Paper: {title}
@@ -1907,7 +1954,7 @@ Abstract: {abstract}
 
 ## Risk of Bias Assessment — {tool_name}
 
-{'### Domain 1: Randomisation process\n- Judgement: Low / Some concerns / High\n- Rationale:\n\n### Domain 2: Deviations from intended interventions\n- Judgement:\n- Rationale:\n\n### Domain 3: Missing outcome data\n- Judgement:\n- Rationale:\n\n### Domain 4: Measurement of the outcome\n- Judgement:\n- Rationale:\n\n### Domain 5: Selection of the reported result\n- Judgement:\n- Rationale:' if study_type == 'RCT' else '### Domain 1: Bias due to confounding\n- Judgement: Low / Moderate / Serious / Critical\n- Rationale:\n\n### Domain 2: Bias in selection of participants\n- Judgement:\n- Rationale:\n\n### Domain 3: Bias in classification of interventions\n- Judgement:\n- Rationale:\n\n### Domain 4: Bias due to deviations from intended interventions\n- Judgement:\n- Rationale:\n\n### Domain 5: Bias due to missing data\n- Judgement:\n- Rationale:\n\n### Domain 6: Bias in measurement of outcomes\n- Judgement:\n- Rationale:\n\n### Domain 7: Bias in selection of the reported result\n- Judgement:\n- Rationale:'}
+{rob_domains}
 
 ## Overall Risk of Bias
 **Judgement:** Low / Some concerns / High / Critical
