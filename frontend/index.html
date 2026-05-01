@@ -275,6 +275,16 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .act-btn{font-size:.74rem;padding:.32rem .7rem;border-radius:6px;border:1px solid var(--b2);background:var(--s1);color:var(--text);cursor:pointer;display:flex;align-items:center;gap:.3rem;transition:all .12s;font-family:var(--sans)}
 .act-btn:hover{border-color:var(--accent);color:var(--accent)}
 .act-btn.loading{opacity:.6;pointer-events:none}
+.act-more{position:relative;display:inline-flex}
+.act-menu{position:absolute;left:0;top:calc(100% + 5px);display:none;min-width:220px;background:var(--s2);border:1px solid var(--b2);border-radius:8px;padding:.35rem;z-index:80;box-shadow:0 14px 34px rgba(0,0,0,.38)}
+.act-menu.open{display:grid;grid-template-columns:1fr;gap:.2rem}
+.act-menu .act-btn{width:100%;justify-content:flex-start;border-color:transparent;background:transparent}
+.review-toggle{display:inline-flex;border:1px solid var(--b2);border-radius:7px;overflow:hidden;background:var(--s1)}
+.review-toggle button{border:0;background:transparent;color:var(--muted);font-size:.7rem;padding:.32rem .62rem;cursor:pointer}
+.review-toggle button.on{background:rgba(0,212,170,.08);color:var(--accent)}
+.evidence-table{width:100%;border-collapse:collapse;font-size:.74rem}
+.evidence-table th,.evidence-table td{border-bottom:1px solid var(--b1);padding:.45rem .5rem;text-align:left;vertical-align:top}
+.evidence-table th{font-family:var(--mono);font-size:.65rem;color:var(--muted);font-weight:500}
 @media(max-width:480px){.stats-visual{grid-template-columns:repeat(2,1fr)}}
 .stat-box{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.6rem;text-align:center}
 .stat-val{font-family:var(--mono);font-size:1.25rem;margin-bottom:.12rem}
@@ -965,6 +975,7 @@ const S = {
   sessionId: null,
   mode: 'chat', qbActive: false,
   activeWizard: null,
+  reviewDepth: 'fast',
   _searchOffset: 0, _searchQuery: '', _allSearchPapers: [],
 };
 
@@ -977,6 +988,7 @@ try {
     userModel:sv.userModel||'claude-sonnet-4-20250514',
     workspace:sv.workspace||[], notes:sv.notes||[],
     sessionId:sv.sessionId||null,
+    reviewDepth:sv.reviewDepth||'fast',
   });
 } catch(e) {}
 
@@ -985,6 +997,7 @@ function save() {
     session:S.session, user:S.user, userKey:S.userKey,
     userProvider:S.userProvider, userModel:S.userModel,
     workspace:S.workspace, notes:S.notes, sessionId:S.sessionId,
+    reviewDepth:S.reviewDepth,
   }));
 }
 
@@ -1353,7 +1366,20 @@ function togglePaperMenu(event, btn) {
 }
 document.addEventListener('click', e=>{
   if(!e.target.closest('.r-more')) document.querySelectorAll('.r-menu.open').forEach(m=>m.classList.remove('open'));
+  if(!e.target.closest('.act-more')) document.querySelectorAll('.act-menu.open').forEach(m=>m.classList.remove('open'));
 });
+
+function toggleActionMenu(event, btn) {
+  event.stopPropagation();
+  btn.nextElementSibling?.classList.toggle('open');
+}
+
+function setReviewDepth(depth) {
+  S.reviewDepth = depth;
+  document.getElementById('fastModeBtn')?.classList.toggle('on', depth !== 'deep');
+  document.getElementById('deepModeBtn')?.classList.toggle('on', depth === 'deep');
+  save();
+}
 
 async function searchMode(query, appendToExisting) {
   const filters = getActiveFilters();
@@ -1437,41 +1463,49 @@ async function searchMode(query, appendToExisting) {
       // Action buttons
       const actBar=document.createElement('div');actBar.className='srch-actions';
       actBar.innerHTML=`
-        <button class="act-btn" onclick="showEvidenceSummary(window._srchPapers,window._srchQuery)">⚡ Evidence Summary</button>
-        <button class="act-btn" onclick="showGapAnalysis(window._srchPapers,window._srchQuery)">🗺 Gaps</button>
-        <button class="act-btn" onclick="showHeadToHead(window._srchPapers,window._srchQuery)">⚖️ Head-to-Head</button>
-        <button class="act-btn" onclick="showForestPlot(window._srchPapers,window._srchQuery)">🌲 Forest Plot</button>
+        <div class="review-toggle">
+          <button id="fastModeBtn" class="on" onclick="setReviewDepth('fast')">Fast Answer</button>
+          <button id="deepModeBtn" onclick="setReviewDepth('deep')">Deep Review</button>
+        </div>
+        <button class="act-btn" onclick="showEvidenceSummary(window._srchPapers,window._srchQuery)">⚡ Bottom Line</button>
+        <button class="act-btn" onclick="showEvidenceTable(window._srchPapers,window._srchQuery)">📋 Evidence Table</button>
+        <button class="act-btn" onclick="showHeadToHead(window._srchPapers,window._srchQuery)">⚖️ Compare</button>
+        <button class="act-btn" onclick="showAIToolResult('absolute_risk',window._srchPapers,window._srchQuery,'📊 Absolute Risk / NNT Analysis')">📊 NNT/NNH</button>
+        <button class="act-btn" onclick="showGradeTable(window._srchPapers,window._srchQuery)">📊 GRADE</button>
         <button class="act-btn" onclick="showGuidelines(window._srchPapers,window._srchQuery)">📋 Guidelines</button>
-        <button class="act-btn" onclick="showDosing(window._srchPapers,window._srchQuery)">💊 Dosing</button>
-        <button class="act-btn" onclick="showDrugInteraction(window._srchPapers,window._srchQuery)">⚠️ Interactions</button>
-        <button class="act-btn" onclick="showAudioSummary(window._srchPapers,window._srchQuery)">🎙 Audio</button>
-        <button class="act-btn" onclick="showSlides(window._srchPapers,window._srchQuery)">🖥 Slides</button>
-        <button class="act-btn" onclick="openCaseSimulator()">🏥 Case Sim</button>
-        <button class="act-btn" onclick="showGradeTable(window._srchPapers,window._srchQuery)">📊 GRADE Table</button>
-        <button class="act-btn" onclick="showAdverseEvents(window._srchPapers,window._srchQuery)">🧬 Adverse Events</button>
-        <button class="act-btn" onclick="showNMA(window._srchPapers,window._srchQuery)">📡 Network MA</button>
-        <button class="act-btn" onclick="showCostEffectiveness(window._srchPapers,window._srchQuery)">💰 Cost-Effectiveness</button>
-        <button class="act-btn" onclick="showGrantProposal(window._srchPapers,window._srchQuery)">📝 Grant</button>
-        <button class="act-btn" onclick="showCMEQuestions(window._srchPapers,window._srchQuery)">📚 CME Quiz</button>
-        <button class="act-btn" onclick="showSRProtocol(window._srchPapers,window._srchQuery)">📋 SR Protocol</button>
-        <button class="act-btn" onclick="showSampleSize(window._srchPapers,window._srchQuery)">🧮 Sample Size</button>
-        <button class="act-btn" onclick="openSRScreen(window._srchPapers)">📋 Screen Papers</button>
-        <button class="act-btn" onclick="showContradictions(window._srchPapers,window._srchQuery)">⚡ Contradictions</button>
-        <button class="act-btn" onclick="showPublicationBias(window._srchPapers,window._srchQuery)">📉 Pub Bias</button>
-        <button class="act-btn" onclick="showCOIDetector(window._srchPapers,window._srchQuery)">💰 COI Check</button>
-        <button class="act-btn" onclick="openPRISMAModal()">📋 PRISMA</button>
-        <button class="act-btn" onclick="showAIToolResult('evidence_score',window._srchPapers,window._srchQuery,'⭐ Evidence Quality Score')">⭐ Evidence Score</button>
-        <button class="act-btn" onclick="showAIToolResult('absolute_risk',window._srchPapers,window._srchQuery,'📊 Absolute Risk / NNT Analysis')">📊 Absolute Risk</button>
-        <button class="act-btn" onclick="showAIToolResult('subgroup_analysis',window._srchPapers,window._srchQuery,'👥 Subgroup Analysis')">👥 Subgroups</button>
-        <button class="act-btn" onclick="showAIToolResult('systematic_comparison',window._srchPapers,window._srchQuery,'⚖️ Systematic Comparison Table')">⚖️ Compare Papers</button>
-        <button class="act-btn" onclick="showAIToolResult('replication_check',window._srchPapers,window._srchQuery,'🔄 Replication Assessment')">🔄 Replication</button>
-        <button class="act-btn" onclick="showAIToolResult('open_science',window._srchPapers,window._srchQuery,'🔓 Open Science Scorecard')">🔓 Open Science</button>
-        <button class="act-btn" onclick="showAIToolResult('pretest_prob',window._srchPapers,window._srchQuery,'🧮 Pre/Post-Test Probability')">🧮 Probability</button>
-        <button class="act-btn" onclick="showAIToolResult('mechanism',window._srchPapers,window._srchQuery,'⚗️ Mechanism of Action')">⚗️ Mechanism</button>
+        <div class="act-more">
+          <button class="act-btn" onclick="toggleActionMenu(event,this)">More ▾</button>
+          <div class="act-menu">
+            <button class="act-btn" onclick="showGapAnalysis(window._srchPapers,window._srchQuery)">🗺 Gaps</button>
+            <button class="act-btn" onclick="showForestPlot(window._srchPapers,window._srchQuery)">🌲 Forest Plot</button>
+            <button class="act-btn" onclick="showDosing(window._srchPapers,window._srchQuery)">💊 Dosing</button>
+            <button class="act-btn" onclick="showDrugInteraction(window._srchPapers,window._srchQuery)">⚠️ Interactions</button>
+            <button class="act-btn" onclick="showAdverseEvents(window._srchPapers,window._srchQuery)">🧬 Adverse Events</button>
+            <button class="act-btn" onclick="openSRScreen(window._srchPapers)">📋 Screen Papers</button>
+            <button class="act-btn" onclick="showAIToolResult('systematic_comparison',window._srchPapers,window._srchQuery,'⚖️ Systematic Comparison Table')">⚖️ Compare Papers</button>
+            <button class="act-btn" onclick="showContradictions(window._srchPapers,window._srchQuery)">⚡ Contradictions</button>
+            <button class="act-btn" onclick="showPublicationBias(window._srchPapers,window._srchQuery)">📉 Pub Bias</button>
+            <button class="act-btn" onclick="showCOIDetector(window._srchPapers,window._srchQuery)">💰 COI Check</button>
+            <button class="act-btn" onclick="showAIToolResult('evidence_score',window._srchPapers,window._srchQuery,'⭐ Evidence Quality Score')">⭐ Evidence Score</button>
+            <button class="act-btn" onclick="showAIToolResult('subgroup_analysis',window._srchPapers,window._srchQuery,'👥 Subgroup Analysis')">👥 Subgroups</button>
+            <button class="act-btn" onclick="showAIToolResult('replication_check',window._srchPapers,window._srchQuery,'🔄 Replication Assessment')">🔄 Replication</button>
+            <button class="act-btn" onclick="showAIToolResult('open_science',window._srchPapers,window._srchQuery,'🔓 Open Science Scorecard')">🔓 Open Science</button>
+            <button class="act-btn" onclick="showAIToolResult('pretest_prob',window._srchPapers,window._srchQuery,'🧮 Pre/Post-Test Probability')">🧮 Probability</button>
+            <button class="act-btn" onclick="showAIToolResult('mechanism',window._srchPapers,window._srchQuery,'⚗️ Mechanism of Action')">⚗️ Mechanism</button>
+            <button class="act-btn" onclick="showAudioSummary(window._srchPapers,window._srchQuery)">🎙 Audio</button>
+            <button class="act-btn" onclick="showSlides(window._srchPapers,window._srchQuery)">🖥 Slides</button>
+            <button class="act-btn" onclick="showCMEQuestions(window._srchPapers,window._srchQuery)">📚 CME Quiz</button>
+            <button class="act-btn" onclick="showSRProtocol(window._srchPapers,window._srchQuery)">📋 SR Protocol</button>
+            <button class="act-btn" onclick="showSampleSize(window._srchPapers,window._srchQuery)">🧮 Sample Size</button>
+            <button class="act-btn" onclick="openPRISMAModal()">📋 PRISMA</button>
+            <button class="act-btn" onclick="openCaseSimulator()">🏥 Case Sim</button>
+          </div>
+        </div>
         <button class="act-btn" onclick="saveSearchAlert(window._srchQuery)" style="border-color:rgba(0,212,170,.3)">🔔 Save Alert</button>
       `;
       window._srchPapers=papers; window._srchQuery=query;
       document.getElementById('msgs').appendChild(actBar);
+      setReviewDepth(S.reviewDepth || 'fast');
     } else {
       window._srchPapers=S._allSearchPapers;
     }
@@ -1521,7 +1555,12 @@ async function searchMode(query, appendToExisting) {
         : '';
 
     const synEl=document.getElementById(synId);
-    const msgs=[{role:'system',content:buildSystemPrompt()+'\n\n'+ctx},{role:'user',content:`Create an Evidence Summary for: ${query}
+    const depthPrompt = S.reviewDepth === 'deep'
+      ? 'Deep Review mode: include mechanisms, evidence hierarchy, heterogeneity, contradictions, applicability, safety, absolute risk/NNT when available, and explicit practice-change judgment.'
+      : 'Fast Answer mode: be concise. Start with a 3-bullet clinical answer, then a short evidence table and GRADE.';
+    const msgs=[{role:'system',content:buildSystemPrompt()+'\n\n'+ctx},{role:'user',content:`${depthPrompt}
+
+Create an Evidence Summary for: ${query}
 
 ${weakMsg}
 
@@ -2559,6 +2598,29 @@ async function showHeadToHead(papers, query) {
 async function showEvidenceSummary(papers, query) {
   const resultEl=addToolPanel(`⚡ Evidence Summary — "${query}"`);
   await runAITool('clinical_bottom_line',{papers,query},resultEl);
+}
+
+function showEvidenceTable(papers, query) {
+  const resultEl=addToolPanel(`📋 Evidence Table — "${query}"`);
+  const rank = {'Guideline':0,'Meta-Analysis':1,'Systematic Review':2,'SR/MA':2,'RCT':3,'Cohort':4,'Observational':5,'Case Report':6,'Preprint':7,'':8};
+  const rows = [...(papers||[])].sort((a,b)=>(rank[a.study_type||'']??8)-(rank[b.study_type||'']??8)).slice(0,12);
+  if(!rows.length) { resultEl.innerHTML='<p style="color:var(--muted)">No papers available for evidence table.</p>'; return; }
+  resultEl.innerHTML = `<table class="evidence-table">
+    <thead><tr><th>Evidence</th><th>Paper</th><th>Design</th><th>Identifiers</th><th>Key Extracted Data</th><th>Warnings</th></tr></thead>
+    <tbody>${rows.map((p,i)=>{
+      const authors=(p.authors||[]).slice(0,2).join(', ');
+      const ids=[p.pmid?`PMID ${esc(p.pmid)}`:'',p.doi?`DOI ${esc(p.doi)}`:''].filter(Boolean).join('<br>');
+      const flags=(p.evidence_flags||[]).map(f=>esc(f.label||f.type)).join('<br>');
+      return `<tr>
+        <td>#${i+1}</td>
+        <td><a href="${p.url||'#'}" target="_blank" rel="noopener">${esc(p.title||'Untitled')}</a><br><span style="color:var(--muted)">${esc(authors)} ${p.year?`(${esc(p.year)})`:''}</span></td>
+        <td>${esc(p.study_type||'Unclassified')}</td>
+        <td>${ids||'NR'}</td>
+        <td>${esc((p.abstract||'NR').slice(0,220))}${p.abstract&&p.abstract.length>220?'...':''}</td>
+        <td>${flags||''}</td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
 }
 
 async function showForestPlot(papers, query) {

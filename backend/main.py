@@ -52,7 +52,7 @@ S2_API_KEY     = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
 TIMEOUT = 20
 
 FREE_DAILY_LIMIT = None
-_DB_PATH = "/tmp/clinsearch.db"
+_DB_PATH = os.environ.get("CLINSEARCH_DB_PATH", "/tmp/clinsearch.db")
 
 def _init_db():
     conn = sqlite3.connect(_DB_PATH)
@@ -125,17 +125,29 @@ class SearchRequest(BaseModel):
 @app.get("/")
 @app.get("/health")
 async def health():
+    started = time.perf_counter()
+    db_ok = False
+    try:
+        conn = sqlite3.connect(_DB_PATH)
+        conn.execute("SELECT 1")
+        conn.close()
+        db_ok = True
+    except Exception:
+        db_ok = False
+    latency_ms = round((time.perf_counter() - started) * 1000, 2)
     return {
         "status": "ok",
         "version": "3.1.0",
         "ai": {
-            "gemini": bool(GEMINI_API_KEY),
-            "groq":   bool(GROQ_API_KEY),
+            "gemini": {"configured": bool(GEMINI_API_KEY), "status": "configured" if GEMINI_API_KEY else "missing_key"},
+            "groq":   {"configured": bool(GROQ_API_KEY), "status": "configured" if GROQ_API_KEY else "missing_key"},
         },
         "cache": {
             "search_entries": len(_search_cache),
             "tool_entries":   len(_tool_cache),
         },
+        "database": {"ok": db_ok, "path": _DB_PATH},
+        "latency_ms": latency_ms,
         "sources": ["pubmed", "s2", "openalex", "europepmc", "cochrane", "who"],
     }
 
