@@ -412,7 +412,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 <div class="overlay" id="authModal">
   <div class="modal">
     <h3>ClinSearch</h3>
-    <p class="modal-sub">Sign in with Google for 20 free AI queries per day — or add your own API key for unlimited use.</p>
+    <p class="modal-sub">Sign in with Google for free AI access — or add your own API key.</p>
     <div class="google-area">
       <div id="g_id_onload" data-client_id="186425237673-97fha6dpjpsiltqdl53olicgacshs65p.apps.googleusercontent.com" data-callback="handleGoogleSignIn" data-auto_prompt="false"></div>
       <div class="g_id_signin" data-type="standard" data-theme="filled_black" data-text="signin_with" data-size="large" data-width="400"></div>
@@ -440,10 +440,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 <div class="overlay" id="quotaModal">
   <div class="modal">
     <h3>Daily limit reached</h3>
-    <p class="modal-sub">You've used your 20 free queries today.</p>
+    <p class="modal-sub">The free AI provider is temporarily unavailable.</p>
     <div class="qopts">
       <div class="qopt" onclick="closeQuota();openAuthModal()"><div class="qo-ico">🔑</div><div><div class="qo-t">Add your API key</div><div class="qo-d">Claude or OpenAI — unlimited, you pay per use</div></div></div>
-      <div class="qopt" onclick="closeQuota()"><div class="qo-ico">🕐</div><div><div class="qo-t">Come back tomorrow</div><div class="qo-d">Quota resets daily at midnight UTC</div></div></div>
+      <div class="qopt" onclick="closeQuota()"><div class="qo-ico">↻</div><div><div class="qo-t">Try again</div><div class="qo-d">Refresh after the backend finishes redeploying</div></div></div>
     </div>
     <button class="mbtn mbtn-c" style="width:100%" onclick="closeQuota()">Close</button>
   </div>
@@ -532,7 +532,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
   </div>
   <div class="hright">
     <span class="hbadge hb-ai-none" id="aiBadge">Loading…</span>
-    <span class="quota-pill qp-ok" id="quotaPill">… / 20</span>
+    <span class="quota-pill qp-ok" id="quotaPill">∞</span>
     <div class="user-btn" id="userBtn" onclick="openAuthModal()">
       <div class="av" id="userAv">?</div>
       <span id="userName">Sign in</span>
@@ -799,7 +799,7 @@ const API = 'https://clinsearch.onrender.com';
 const S = {
   session: null, user: null,
   userKey: '', userProvider: 'claude', userModel: 'claude-sonnet-4-20250514',
-  history: [], quota: {used:0,limit:20},
+  history: [], quota: {used:0,limit:null,unlimited:true},
   aiProvider: '', isDemo: false,
   workspace: [], notes: [],
   sessionId: null,
