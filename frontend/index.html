@@ -839,10 +839,10 @@ async function fetchSearchContext(query) {
     const r = await fetch(`${API}/api/search?q=${encodeURIComponent(query)}&n=5`);
     const d = await r.json();
     if(!d.results?.length) return '';
-    let ctx = '\n\n[REAL PAPERS RETRIEVED — cite these, do not invent papers]\n';
-    d.results.slice(0,6).forEach((p,i) => {
-      const authors = (p.authors||[]).slice(0,2).join(', ');
-      ctx += `\n[${i+1}] "${p.title}"\n    ${authors} (${p.year||''}) ${p.journal||''}\n    ${(p.abstract||'').slice(0,300)}\n    URL: ${p.url||''}\n`;
+    let ctx = '\n\n[REAL PAPERS RETRIEVED — cite every claim using [N] and format as markdown link [Title](URL). Do NOT invent additional papers.]\n';
+    d.results.slice(0,8).forEach((p,i) => {
+      const authors = (p.authors||[]).slice(0,3).join(', ');
+      ctx += `\n[${i+1}] "${p.title}" — URL: ${p.url||''}\n    Authors: ${authors} | Year: ${p.year||''} | Journal: ${p.journal||''} | Citations: ${p.citations||''}\n    Abstract: ${(p.abstract||'').slice(0,600)}\n`;
     });
     return ctx;
   } catch(e) { return ''; }
@@ -906,6 +906,8 @@ async function aiReply(text) {
     updateAIBadge();
     S.history.push({role:'assistant', content:response});
     saveSession();
+    // Show real paper cards after the AI message
+    renderPaperCards(text, el.closest('.msg'));
 
   } catch(e) {
     document.getElementById('typing')?.remove();
@@ -920,9 +922,11 @@ function buildSystemPrompt() {
 
 ## CORE RULES
 - When real papers are provided in context, cite EVERY factual claim with [1], [2] etc. using their ACTUAL data — never invent studies.
+- Format each citation as a markdown link using the paper's URL: **[[1] Author et al., Year](URL)** — this creates a clickable link.
 - Extract from each paper: study design, N, primary endpoint, effect size (OR/RR/HR/MD), 95% CI, p-value, NNT/NNH, follow-up, limitations.
 - Compare and contrast findings across studies. Highlight heterogeneity and contradictions.
 - Flag areas of active controversy or insufficient evidence.
+- At the END of your response, add a **## Referências** section listing all cited papers as: [N] Authors. Title. Journal. Year. [Link](URL)
 
 ## RESPONSE STRUCTURE (always follow this order)
 1. **⚡ Clinical Bottom Line** — 2–3 sentence actionable summary at the TOP, written for a clinician making a decision RIGHT NOW.
@@ -1355,6 +1359,7 @@ function mdToHtml(t) {
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
     .replace(/\*(.+?)\*/g,'<em>$1</em>')
     .replace(/`(.+?)`/g,'<code>$1</code>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline;text-underline-offset:2px">$1</a>')
     .replace(/^---$/gm,'<hr>')
     .replace(/^\| (.+) \|$/gm,(m,row)=>{if(row.match(/^[-\s|]+$/))return'';const cells=row.split('|').map(c=>c.trim());return`<tr>${cells.map(c=>`<td>${c}</td>`).join('')}</tr>`;})
     .replace(/((?:<tr>.*<\/tr>\n?)+)/g,'<table>$1</table>')
@@ -1362,6 +1367,52 @@ function mdToHtml(t) {
     .replace(/((?:<li>.*<\/li>\n?)+)/g,'<ul>$1</ul>')
     .replace(/\n\n/g,'</p><p>')
     .replace(/^(?!<[h3h4litrulhr]|<\/|<table|<\/table)(.+)$/gm,'<p>$1</p>');
+}
+
+async function renderPaperCards(query, afterEl) {
+  if(!SEARCH_RE.test(query)) return;
+  try {
+    const r = await fetch(`${API}/api/search?q=${encodeURIComponent(query)}&n=8`);
+    const d = await r.json();
+    if(!d.results?.length) return;
+    const papers = d.results.slice(0,8);
+    S._lastRealResults = papers;
+    const srcLabel = {pubmed:'PubMed', semantic_scholar:'S2', openalex:'OA'};
+    const srcClass = {pubmed:'src-pm', semantic_scholar:'src-s2', openalex:'src-oa'};
+    const container = document.createElement('div');
+    container.style.cssText = 'margin:.5rem 0 .5rem 2.8rem';
+    container.innerHTML = `<div style="font-size:.72rem;color:var(--muted);margin-bottom:.4rem;font-family:var(--mono)">📄 ${papers.length} papers encontrados</div><div class="r-grid">${
+      papers.map(p => {
+        const authors = (p.authors||[]).slice(0,3).join(', ');
+        const abs = (p.abstract||'').slice(0,280);
+        const src = p.source||'';
+        const pmid = p.pmid||p.id||'';
+        const doi = p.doi||'';
+        const url = p.url || (pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : '#');
+        return `<div class="r-card">
+          <div class="r-top">
+            <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
+            ${src?`<span class="r-src ${srcClass[src]||''}">${srcLabel[src]||src}</span>`:''}
+          </div>
+          <div class="r-meta">
+            <span>${esc(authors)}</span>
+            ${p.year?`<span class="r-sep">·</span><span>${p.year}</span>`:''}
+            ${p.journal?`<span class="r-sep">·</span><span><em>${esc(p.journal)}</em></span>`:''}
+            ${p.citations?`<span class="cites">⭐ ${p.citations}</span>`:''}
+          </div>
+          ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
+          <div class="r-acts">
+            <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
+            ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
+            <button class="rbtn rbtn-save" onclick='saveToWorkspace(${JSON.stringify(p)})'>💾 Save</button>
+            ${pmid?`<button class="rbtn" onclick="readFulltext('${pmid}','${doi}','${esc(p.title||'')}')">📖 Read</button>`:''}
+          </div>
+        </div>`;
+      }).join('')
+    }</div>`;
+    if(afterEl) afterEl.after(container);
+    else document.getElementById('msgs').appendChild(container);
+  } catch(e) {}
 }
 
 // ── Alert ──────────────────────────────────────────────────────────────────────
