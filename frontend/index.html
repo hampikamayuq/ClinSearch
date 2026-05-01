@@ -1149,17 +1149,17 @@ async function searchMode(query) {
           <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
           ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
           <button class="rbtn rbtn-save" onclick='saveToWorkspace(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'  >💾 Save</button>
-          ${pmid?`<button class="rbtn" onclick="readFulltext('${pmid}','${doi}','${esc(p.title||'')}')">📖 Read</button>`:''}
-          <button class="rbtn" onclick='showJournalClub("${pmid}","${doi}","${esc(p.title||'')}")'>📋 Journal Club</button>
+          ${pmid?`<button class="rbtn" onclick='readFulltext(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(pmid))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")),this)'>📖 Read</button>`:''}
+          <button class="rbtn" onclick='showJournalClub(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(pmid))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.title||''))}")))'>📋 Journal Club</button>
           <button class="rbtn" onclick='showPatientSummary(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>👤 Patient</button>
           <button class="rbtn" onclick='showPICO(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>🔬 PICO</button>
-          <button class="rbtn" onclick='showDrugInteraction([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], "${esc(p.title||'')}")'>💊 Interactions</button>
+          <button class="rbtn" onclick='showDrugInteraction([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.title||''))}")))'>💊 Interactions</button>
           <button class="rbtn" onclick='showTranslation(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>🌐 Translate</button>
           <button class="rbtn" onclick='showRoB(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>⚖️ RoB</button>
           <button class="rbtn" onclick='showStatsCritic(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>📐 Stats</button>
-          <button class="rbtn" onclick='showCMEQuestions([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], "${esc(p.title||'')}")'>📚 CME</button>
-          ${pmid?`<button class="rbtn" onclick="showCitationGraph('${pmid}','')">🕸 Citations</button>`:(doi?`<button class="rbtn" onclick="showCitationGraph('','${doi}')">🕸 Citations</button>`:'')}
-          ${(p.url||doi)?`<button class="rbtn" onclick="analyzePDF('${esc(p.url||'')}','${doi}','${esc(p.title||'')}')">📄 AI Read</button>`:''}
+          <button class="rbtn" onclick='showCMEQuestions([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.title||''))}")))'>📚 CME</button>
+          ${pmid?`<button class="rbtn" onclick='showCitationGraph(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(pmid))}")),"")'>🕸 Citations</button>`:(doi?`<button class="rbtn" onclick='showCitationGraph("",JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")))'>🕸 Citations</button>`:'')}
+          ${(p.url||doi)?`<button class="rbtn" onclick='analyzePDF(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.url||''))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.title||''))}")))'>📄 AI Read</button>`:''}
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -1845,8 +1845,8 @@ async function renderPaperCards(query, afterEl) {
           <div class="r-acts">
             <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
             ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
-            <button class="rbtn rbtn-save" onclick='saveToWorkspace(${JSON.stringify(p)})'>💾 Save</button>
-            ${pmid?`<button class="rbtn" onclick="readFulltext('${pmid}','${doi}','${esc(p.title||'')}')">📖 Read</button>`:''}
+            <button class="rbtn rbtn-save" onclick='saveToWorkspace(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>💾 Save</button>
+            ${pmid?`<button class="rbtn" onclick='readFulltext(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(pmid))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")),this)'>📖 Read</button>`:''}
           </div>
         </div>`;
       }).join('')
@@ -2161,8 +2161,8 @@ async function preprintsMode(query) {
         <div class="r-acts">
           <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
           ${p.doi?`<a class="rbtn" href="https://doi.org/${p.doi}" target="_blank" rel="noopener">DOI</a>`:''}
-          <button class="rbtn rbtn-save" onclick='saveToWorkspace(${JSON.stringify({id:p.doi||p.url,title:p.title,authors:typeof p.authors==="string"?[p.authors]:(p.authors||[]),year:(p.date||"").slice(0,4),doi:p.doi,url:p.url,source:p.server})})'>💾 Save</button>
-          <button class="rbtn" onclick='showPICO(${JSON.stringify({title:p.title,abstract:p.abstract})})'>🔬 PICO</button>
+          <button class="rbtn rbtn-save" onclick='saveToWorkspace(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify({id:p.doi||p.url,title:p.title,authors:typeof p.authors==="string"?[p.authors]:(p.authors||[]),year:(p.date||"").slice(0,4),doi:p.doi,url:p.url,source:p.server}))}")))'>💾 Save</button>
+          <button class="rbtn" onclick='showPICO(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify({title:p.title,abstract:p.abstract}))}")))'>🔬 PICO</button>
         </div>
       </div>`;
     }).join('')}</div>`;

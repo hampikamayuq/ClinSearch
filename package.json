@@ -1,0 +1,25 @@
+{
+  "name": "clinsearch_v3",
+  "version": "1.0.0",
+  "description": "**The most complete free AI research assistant for medical professionals.**",
+  "main": "index.js",
+  "scripts": {
+    "check:js": "awk '/<script>/{flag=1;next}/<\\/script>/{flag=0}flag' frontend/index.html > /tmp/clinsearch-inline.js && node --check /tmp/clinsearch-inline.js && node -e \"const fs=require('fs'); const acorn=require('acorn'); const src=fs.readFileSync('/tmp/clinsearch-inline.js','utf8'); acorn.parse(src,{ecmaVersion:'latest'}); console.log('JS parse ok')\"",
+    "test": "npm run check:js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hampikamayuq/ClinSearch.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hampikamayuq/ClinSearch/issues"
+  },
+  "homepage": "https://github.com/hampikamayuq/ClinSearch#readme",
+  "devDependencies": {
+    "acorn": "^8.16.0",
+    "esprima": "^4.0.1"
+  }
+}

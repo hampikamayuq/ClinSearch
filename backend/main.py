@@ -68,7 +68,8 @@ def _init_db():
             papers TEXT DEFAULT '[]',
             notes TEXT DEFAULT '[]',
             messages TEXT DEFAULT '[]',
-            created TEXT
+            created TEXT,
+            updated TEXT
         );
         CREATE TABLE IF NOT EXISTS workspace (
             id TEXT PRIMARY KEY,
@@ -94,9 +95,9 @@ _init_db()
 
 def _migrate_db():
     conn = sqlite3.connect(_DB_PATH)
-    for col, default in [("messages", "[]"), ("updated", "''")]:
+    for col, default in [("messages", "'[]'"), ("updated", "''")]:
         try:
-            conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} TEXT DEFAULT '{default}'")
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} TEXT DEFAULT {default}")
             conn.commit()
         except sqlite3.OperationalError:
             pass
@@ -591,16 +592,30 @@ async def session_manager(req: SessionRequest):
         topic = req.data.get("topic","") if req.data else ""
         created = datetime.utcnow().isoformat()
         conn = sqlite3.connect(_DB_PATH)
-        conn.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?)", (sid, topic, "[]", "[]", "[]", created))
+        conn.execute(
+            "INSERT INTO sessions (id, topic, papers, notes, messages, created, updated) VALUES (?,?,?,?,?,?,?)",
+            (sid, topic, "[]", "[]", "[]", created, created)
+        )
         conn.commit(); conn.close()
         return {"id": sid, "topic": topic, "papers": [], "notes": [], "created": created}
 
     if req.action == "get":
         conn = sqlite3.connect(_DB_PATH)
-        row = conn.execute("SELECT * FROM sessions WHERE id=?", (req.session_id,)).fetchone()
+        row = conn.execute(
+            "SELECT id, topic, papers, notes, messages, created, updated FROM sessions WHERE id=?",
+            (req.session_id,)
+        ).fetchone()
         conn.close()
         if not row: return {"error": "Session not found"}
-        return {"id":row[0],"topic":row[1],"papers":json.loads(row[2]),"notes":json.loads(row[3]),"created":row[4]}
+        return {
+            "id": row[0],
+            "topic": row[1],
+            "papers": json.loads(row[2] or "[]"),
+            "notes": json.loads(row[3] or "[]"),
+            "messages": json.loads(row[4] or "[]"),
+            "created": row[5],
+            "updated": row[6],
+        }
 
     if req.action == "save_paper":
         conn = sqlite3.connect(_DB_PATH)
@@ -610,7 +625,10 @@ async def session_manager(req: SessionRequest):
         paper = req.data or {}
         if paper.get("id") not in [p.get("id") for p in papers]:
             papers.append(paper)
-            conn.execute("UPDATE sessions SET papers=? WHERE id=?", (json.dumps(papers), req.session_id))
+            conn.execute(
+                "UPDATE sessions SET papers=?, updated=? WHERE id=?",
+                (json.dumps(papers), datetime.utcnow().isoformat(), req.session_id)
+            )
             conn.commit()
         conn.close()
         return {"saved": True, "total": len(papers)}
@@ -621,7 +639,10 @@ async def session_manager(req: SessionRequest):
         row = conn.execute("SELECT papers FROM sessions WHERE id=?", (req.session_id,)).fetchone()
         if row:
             papers = [p for p in json.loads(row[0]) if p.get("id") != pid]
-            conn.execute("UPDATE sessions SET papers=? WHERE id=?", (json.dumps(papers), req.session_id))
+            conn.execute(
+                "UPDATE sessions SET papers=?, updated=? WHERE id=?",
+                (json.dumps(papers), datetime.utcnow().isoformat(), req.session_id)
+            )
             conn.commit()
         conn.close()
         return {"removed": True}
@@ -632,14 +653,20 @@ async def session_manager(req: SessionRequest):
         if row:
             notes = json.loads(row[0])
             notes.append({"text": (req.data or {}).get("text",""), "timestamp": datetime.utcnow().isoformat()})
-            conn.execute("UPDATE sessions SET notes=? WHERE id=?", (json.dumps(notes), req.session_id))
+            conn.execute(
+                "UPDATE sessions SET notes=?, updated=? WHERE id=?",
+                (json.dumps(notes), datetime.utcnow().isoformat(), req.session_id)
+            )
             conn.commit()
         conn.close()
         return {"saved": True}
 
     if req.action == "clear":
         conn = sqlite3.connect(_DB_PATH)
-        conn.execute("UPDATE sessions SET papers='[]', notes='[]' WHERE id=?", (req.session_id,))
+        conn.execute(
+            "UPDATE sessions SET papers='[]', notes='[]', updated=? WHERE id=?",
+            (datetime.utcnow().isoformat(), req.session_id)
+        )
         conn.commit(); conn.close()
         return {"cleared": True}
 
@@ -656,11 +683,11 @@ async def session_manager(req: SessionRequest):
         topic = (req.data or {}).get("topic", "")
         conn = sqlite3.connect(_DB_PATH)
         if topic:
-            conn.execute("UPDATE sessions SET messages=?, topic=? WHERE id=?",
-                        (json.dumps(msgs), topic, req.session_id))
+            conn.execute("UPDATE sessions SET messages=?, topic=?, updated=? WHERE id=?",
+                        (json.dumps(msgs), topic, datetime.utcnow().isoformat(), req.session_id))
         else:
-            conn.execute("UPDATE sessions SET messages=? WHERE id=?",
-                        (json.dumps(msgs), req.session_id))
+            conn.execute("UPDATE sessions SET messages=?, updated=? WHERE id=?",
+                        (json.dumps(msgs), datetime.utcnow().isoformat(), req.session_id))
         conn.commit(); conn.close()
         return {"saved": True}
 
