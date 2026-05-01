@@ -1049,9 +1049,10 @@ async def ai_tool(req: AIToolRequest):
             except Exception:
                 pass
 
+        paper_section = ("Paper content:\n" + paper_text) if paper_text else ("Query: " + (req.query or ""))
         prompt = f"""You are a senior clinician running a journal club.
 
-{'Paper content:\n' + paper_text if paper_text else 'Query: ' + (req.query or '')}
+{paper_section}
 
 Generate a complete journal club presentation with these sections:
 ## 1. Background & Clinical Question
