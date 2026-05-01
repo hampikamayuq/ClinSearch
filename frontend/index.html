@@ -922,6 +922,14 @@ async function searchMode(query) {
       <button class="act-btn" onclick="showAudioSummary(window._srchPapers,window._srchQuery)">🎙 Audio</button>
       <button class="act-btn" onclick="showSlides(window._srchPapers,window._srchQuery)">🖥 Slides</button>
       <button class="act-btn" onclick="openCaseSimulator()">🏥 Case Sim</button>
+      <button class="act-btn" onclick="showGradeTable(window._srchPapers,window._srchQuery)">📊 GRADE Table</button>
+      <button class="act-btn" onclick="showAdverseEvents(window._srchPapers,window._srchQuery)">🧬 Adverse Events</button>
+      <button class="act-btn" onclick="showNMA(window._srchPapers,window._srchQuery)">📡 Network MA</button>
+      <button class="act-btn" onclick="showCostEffectiveness(window._srchPapers,window._srchQuery)">💰 Cost-Effectiveness</button>
+      <button class="act-btn" onclick="showGrantProposal(window._srchPapers,window._srchQuery)">📝 Grant</button>
+      <button class="act-btn" onclick="showCMEQuestions(window._srchPapers,window._srchQuery)">📚 CME Quiz</button>
+      <button class="act-btn" onclick="showSRProtocol(window._srchPapers,window._srchQuery)">📋 SR Protocol</button>
+      <button class="act-btn" onclick="showSampleSize(window._srchPapers,window._srchQuery)">🧮 Sample Size</button>
     `;
     window._srchPapers=papers; window._srchQuery=query;
     document.getElementById('msgs').appendChild(actBar);
@@ -965,6 +973,9 @@ async function searchMode(query) {
           <button class="rbtn" onclick='showPICO(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>🔬 PICO</button>
           <button class="rbtn" onclick='showDrugInteraction([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], "${esc(p.title||'')}")'>💊 Interactions</button>
           <button class="rbtn" onclick='showTranslation(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>🌐 Translate</button>
+          <button class="rbtn" onclick='showRoB(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>⚖️ RoB</button>
+          <button class="rbtn" onclick='showStatsCritic(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>📐 Stats</button>
+          <button class="rbtn" onclick='showCMEQuestions([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], "${esc(p.title||'')}")'>📚 CME</button>
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -1830,6 +1841,57 @@ async function runTranslation() {
   const paper=Object.assign({},_translatePaper,{_lang:lang});
   const resultEl=addToolPanel(`🌐 ${lang} — ${(_translatePaper.title||'').slice(0,45)}…`);
   await runAITool('translation',{papers:[paper],query:lang},resultEl);
+}
+
+// ── Sprint 4 Tools ────────────────────────────────────────────────────────────
+async function showRoB(paper) {
+  const resultEl=addToolPanel(`⚖️ Risk of Bias — ${(paper.title||'').slice(0,55)}…`);
+  await runAITool('rob',{papers:[paper],query:paper.title||''},resultEl);
+}
+
+async function showGradeTable(papers, query) {
+  const resultEl=addToolPanel(`📊 GRADE Evidence Profile — "${query}"`);
+  await runAITool('grade_table',{papers,query},resultEl);
+}
+
+async function showAdverseEvents(papers, query) {
+  const resultEl=addToolPanel(`🧬 Adverse Events Profile — "${query}"`);
+  await runAITool('adverse_events',{papers,query},resultEl);
+}
+
+async function showNMA(papers, query) {
+  const resultEl=addToolPanel(`📡 Network Meta-Analysis — "${query}"`);
+  await runAITool('nma',{papers,query},resultEl);
+}
+
+async function showCostEffectiveness(papers, query) {
+  const resultEl=addToolPanel(`💰 Cost-Effectiveness — "${query}"`);
+  await runAITool('cost_effectiveness',{papers,query},resultEl);
+}
+
+async function showGrantProposal(papers, query) {
+  const resultEl=addToolPanel(`📝 Grant Proposal — "${query}"`);
+  await runAITool('grant_proposal',{papers,query},resultEl);
+}
+
+async function showCMEQuestions(papers, query) {
+  const resultEl=addToolPanel(`📚 CME Questions — "${(query||'').slice(0,50)}"`);
+  await runAITool('cme_questions',{papers,query},resultEl);
+}
+
+async function showStatsCritic(paper) {
+  const resultEl=addToolPanel(`📐 Statistical Critique — ${(paper.title||'').slice(0,50)}…`);
+  await runAITool('stats_critic',{papers:[paper],query:paper.title||''},resultEl);
+}
+
+async function showSRProtocol(papers, query) {
+  const resultEl=addToolPanel(`📋 SR Protocol — "${query}"`);
+  await runAITool('sr_protocol',{papers,query},resultEl);
+}
+
+async function showSampleSize(papers, query) {
+  const resultEl=addToolPanel(`🧮 Sample Size — "${query}"`);
+  await runAITool('sample_size',{papers,query},resultEl);
 }
 
 // ── Alert ──────────────────────────────────────────────────────────────────────

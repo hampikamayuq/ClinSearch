@@ -1477,6 +1477,423 @@ Abstract: {abstract}
 Level: High / Moderate / Low / Very Low
 **Rationale:** why this GRADE level?"""
 
+    elif req.tool == "rob":
+        paper = (req.papers or [{}])[0]
+        title = paper.get("title", req.query or "")
+        abstract = (paper.get("abstract", "") or "")[:2000]
+        study_type = "RCT" if any(w in (title+abstract).lower() for w in ["randomiz","randomis","rct","placebo","double-blind"]) else "observational"
+        tool_name = "RoB 2.0 (Cochrane)" if study_type == "RCT" else "ROBINS-I"
+        prompt = f"""You are a systematic reviewer performing a {tool_name} risk of bias assessment.
+
+Paper: {title}
+Abstract: {abstract}
+
+## Risk of Bias Assessment — {tool_name}
+
+{'### Domain 1: Randomisation process\n- Judgement: Low / Some concerns / High\n- Rationale:\n\n### Domain 2: Deviations from intended interventions\n- Judgement:\n- Rationale:\n\n### Domain 3: Missing outcome data\n- Judgement:\n- Rationale:\n\n### Domain 4: Measurement of the outcome\n- Judgement:\n- Rationale:\n\n### Domain 5: Selection of the reported result\n- Judgement:\n- Rationale:' if study_type == 'RCT' else '### Domain 1: Bias due to confounding\n- Judgement: Low / Moderate / Serious / Critical\n- Rationale:\n\n### Domain 2: Bias in selection of participants\n- Judgement:\n- Rationale:\n\n### Domain 3: Bias in classification of interventions\n- Judgement:\n- Rationale:\n\n### Domain 4: Bias due to deviations from intended interventions\n- Judgement:\n- Rationale:\n\n### Domain 5: Bias due to missing data\n- Judgement:\n- Rationale:\n\n### Domain 6: Bias in measurement of outcomes\n- Judgement:\n- Rationale:\n\n### Domain 7: Bias in selection of the reported result\n- Judgement:\n- Rationale:'}
+
+## Overall Risk of Bias
+**Judgement:** Low / Some concerns / High / Critical
+**Summary:** 2-3 sentences explaining the overall assessment.
+
+## Impact on Conclusions
+How does this risk of bias affect the reliability of the results?"""
+
+    elif req.tool == "grade_table":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:10], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}, N={p.get('citations','?')}) — {(p.get('abstract','') or '')[:350]}"
+        topic = req.query or "the intervention vs comparator"
+        prompt = f"""You are a systematic reviewer creating a GRADE Evidence Profile for: {topic}
+
+Papers:{papers_ctx}
+
+Generate a complete GRADE Evidence Profile table:
+
+## GRADE Summary of Findings
+
+| Outcome | Studies (N) | Study Design | Risk of Bias | Inconsistency | Indirectness | Imprecision | Effect (95% CI) | Certainty |
+|---------|------------|--------------|--------------|---------------|-------------|-------------|-----------------|-----------|
+| Primary efficacy | | RCT | | | | | | ⊕⊕⊕⊕ |
+| Mortality | | | | | | | | |
+| Serious AEs | | | | | | | | |
+| QoL | | | | | | | | |
+| Discontinuation | | | | | | | | |
+
+## Footnotes
+Explain each downgrade/upgrade decision with specific rationale.
+
+## Authors' Conclusions
+What can be confidently recommended based on this evidence?
+
+## Implications for Practice
+What clinicians should do NOW with this level of certainty.
+
+## Implications for Research
+What studies are needed to upgrade the certainty."""
+
+    elif req.tool == "adverse_events":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:10], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:400]}"
+        topic = req.query or "the drugs in these papers"
+        prompt = f"""You are a clinical pharmacovigilance expert. Extract and synthesize safety/adverse event data for: {topic}
+
+Papers:{papers_ctx}
+
+## 🚨 Adverse Events Summary
+
+### Serious Adverse Events (SAEs)
+| Adverse Event | Incidence (treatment) | Incidence (control) | RR/OR | NNH | Grade |
+|--------------|----------------------|---------------------|-------|-----|-------|
+
+### Common Adverse Events (>5%)
+| Adverse Event | Incidence (treatment) | Incidence (control) | Significant? |
+|--------------|----------------------|---------------------|-------------|
+
+## 🔴 Black Box Warnings / Critical Safety Signals
+Any life-threatening risks identified.
+
+## ⚠️ Discontinuation Due to AEs
+Rate of discontinuation and leading reasons.
+
+## 📊 Safety by Subgroup
+Any subgroups with higher AE risk (age, comorbidities, dose).
+
+## 🔄 Long-term Safety Data
+What is known beyond the trial duration.
+
+## 💊 Drug-Specific Safety Monitoring
+Recommended laboratory tests, imaging, or clinical monitoring."""
+
+    elif req.tool == "nma":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:10], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:400]}"
+        topic = req.query or "the treatments"
+        prompt = f"""You are a network meta-analysis expert. Interpret NMA findings for: {topic}
+
+Papers:{papers_ctx}
+
+## 🕸️ Network of Evidence
+
+### Direct vs Indirect Comparisons Available
+| Treatment A | Treatment B | Direct evidence? | Indirect via? |
+|------------|------------|-----------------|---------------|
+
+## 📊 NMA Results (Primary Outcome)
+| Treatment | vs Placebo (OR, 95% CrI) | Ranking (P-score/SUCRA) |
+|----------|--------------------------|-------------------------|
+
+## 🏆 Treatment Ranking
+1. Best treatment: [name] — rationale
+2. Second: [name]
+...
+
+## ⚠️ Heterogeneity & Inconsistency
+- Global I²
+- Key sources of heterogeneity
+- Inconsistency test results
+
+## 📉 Publication Bias Assessment
+Funnel plot asymmetry / small study effects.
+
+## 🔍 Key Assumptions
+Transitivity assumption validity for this network.
+
+## 💡 Clinical Interpretation
+What the ranking means for clinical practice — caution around indirect comparisons."""
+
+    elif req.tool == "cost_effectiveness":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:8], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:350]}"
+        topic = req.query or "the intervention"
+        prompt = f"""You are a health economist. Perform a pharmacoeconomic analysis for: {topic}
+
+Papers:{papers_ctx}
+
+## 💰 Cost-Effectiveness Analysis
+
+### Cost Data (from papers or estimates)
+| Intervention | Annual cost (USD) | Cost source |
+|-------------|------------------|-------------|
+
+### Effectiveness Data
+| Intervention | QALYs gained | LYs saved | Response rate |
+|-------------|-------------|-----------|---------------|
+
+## 📊 ICER Calculation
+Incremental Cost-Effectiveness Ratio:
+- ICER = (Cost_A - Cost_B) / (Effect_A - Effect_B) = [value] per QALY
+- WTP threshold comparison: $50,000/QALY (US) · £20,000-30,000/QALY (NICE)
+- Verdict: Cost-effective / Not cost-effective / Borderline
+
+## 🏥 Budget Impact
+- Target population size
+- Annual budget impact estimate
+- Per-patient, per-year cost
+
+## 📈 Sensitivity Analysis
+Key drivers of uncertainty in the economic model.
+
+## 🌍 Healthcare System Perspective
+How cost-effectiveness varies by country/payer system.
+
+## 💡 Value-Based Recommendations
+At what price point does this intervention become cost-effective?"""
+
+    elif req.tool == "grant_proposal":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:8], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:300]}"
+        topic = req.query or "the identified research gap"
+        prompt = f"""You are a senior academic researcher. Write a competitive grant proposal abstract and specific aims for: {topic}
+
+Evidence base:{papers_ctx}
+
+## 📝 Grant Proposal
+
+### Title
+[Concise, compelling title under 200 characters]
+
+### Abstract (250 words)
+Background, gap, hypothesis, aims, methods, significance. Written for a non-specialist reviewer.
+
+### Specific Aims (1 page)
+
+**Background & Significance (3-4 sentences)**
+What is known, what is the gap, why does it matter.
+
+**Central Hypothesis**
+We hypothesize that [specific, testable statement].
+
+**Aim 1:** [Action verb + specific measurable goal]
+- Rationale:
+- Approach: [study design, N, primary endpoint]
+- Expected outcome:
+
+**Aim 2:** [Action verb + specific measurable goal]
+- Rationale:
+- Approach:
+- Expected outcome:
+
+**Aim 3 (exploratory):** [Action verb + specific measurable goal]
+- Rationale:
+- Approach:
+
+**Innovation**
+What is novel about this approach compared to prior work?
+
+**Impact**
+If successful, this research will... (patient outcomes, clinical practice, policy)
+
+### Budget Justification (brief)
+Personnel, equipment, consumables — rough estimates with rationale.
+
+### Timeline
+Month-by-month milestones for a 3-year grant."""
+
+    elif req.tool == "cme_questions":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:6], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:350]}"
+        topic = req.query or "the evidence in these papers"
+        prompt = f"""You are a medical educator. Create 5 CME multiple-choice questions based on: {topic}
+
+Papers:{papers_ctx}
+
+For each question:
+
+### Question [N]
+**Stem:** [Clinical vignette or direct knowledge question — 2-4 sentences]
+
+A) [Option A]
+B) [Option B]
+C) [Option C]
+D) [Option D]
+E) [Option E]
+
+**Correct Answer:** [Letter]
+
+**Explanation:** (3-5 sentences) Why is this the correct answer? Why are the distractors wrong? Reference the evidence.
+
+**Learning Objective:** What concept does this question test?
+
+**Difficulty:** Easy / Intermediate / Advanced
+
+---
+
+Questions should:
+- Cover different aspects of the topic (not all the same concept)
+- Include at least 2 clinical vignettes
+- Have plausible distractors (common misconceptions)
+- Be at postgraduate medical education level"""
+
+    elif req.tool == "stats_critic":
+        paper = (req.papers or [{}])[0]
+        title = paper.get("title", req.query or "")
+        abstract = (paper.get("abstract", "") or "")[:2000]
+        prompt = f"""You are a biostatistician and methodologist. Critically appraise the statistical methods of this paper.
+
+Paper: {title}
+Abstract: {abstract}
+
+## 📐 Statistical Methods Critique
+
+### Study Design Assessment
+- Appropriate design for the research question? Y/N + rationale
+- Sample size: adequate / underpowered / overpowered?
+- Power calculation: reported / missing / flawed?
+
+### Primary Analysis
+- Statistical test used: [name]
+- Appropriate for data type and distribution? Y/N
+- Multiple comparisons adjustment: adequate / missing?
+- Intention-to-treat vs per-protocol: which used, appropriate?
+
+### Effect Measures
+| Measure reported | More appropriate measure | Reason |
+|-----------------|--------------------------|--------|
+
+### Common Statistical Errors Checklist
+- [ ] P-hacking / outcome switching
+- [ ] Baseline imbalance not adjusted
+- [ ] Inappropriate subgroup analyses
+- [ ] Surrogate outcomes without validation
+- [ ] Missing data handling inadequate
+- [ ] Confidence intervals not reported
+- [ ] Correlation vs causation conflated
+
+### Clinically vs Statistically Significant
+Is the effect size clinically meaningful despite statistical significance (or vice versa)?
+
+### Overall Methodological Quality Score
+[1-10] with justification.
+
+### Recommendations for Readers
+How should clinicians interpret and apply these results given the statistical limitations?"""
+
+    elif req.tool == "sr_protocol":
+        topic = req.query or "the research question"
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:5], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')})"
+        prompt = f"""You are a systematic review methodologist. Write a PRISMA-compliant systematic review protocol for: {topic}
+
+Related papers:{papers_ctx}
+
+## Systematic Review Protocol
+
+### Title
+[Structured title: Intervention in Population — A Systematic Review and Meta-Analysis]
+
+### Background
+Rationale for the review, existing evidence, and gaps (3-4 paragraphs).
+
+### Objectives
+To assess the [effectiveness/safety/accuracy] of [intervention] in [population] compared to [comparator] on [outcomes].
+
+### Methods
+
+#### Eligibility Criteria (PICOS)
+- **P (Population):** inclusion/exclusion criteria
+- **I (Intervention):** specific interventions included
+- **C (Comparators):** acceptable comparators
+- **O (Outcomes):**
+  - Primary: [specific outcome, timepoint]
+  - Secondary: [list]
+- **S (Study design):** RCTs / observational / all designs
+
+#### Information Sources
+Databases: MEDLINE/PubMed, EMBASE, Cochrane CENTRAL, ClinicalTrials.gov, WHO ICTRP
+Search dates: [from] to present
+Grey literature: conference abstracts, regulatory documents
+
+#### Search Strategy (PubMed example)
+```
+([MeSH terms]) AND ([free text terms]) AND ([study type filters])
+```
+
+#### Data Extraction
+Two independent reviewers. Disagreements resolved by consensus or third reviewer.
+
+#### Risk of Bias Assessment
+RCTs: Cochrane RoB 2.0. Observational: ROBINS-I.
+
+#### Statistical Analysis Plan
+- Pooling method: random effects (DerSimonian-Laird) if I²>50%, fixed effects otherwise
+- Heterogeneity: Cochran Q, I², tau²
+- Subgroup analyses: [pre-specified list]
+- Sensitivity analyses: [list]
+- Publication bias: funnel plot + Egger's test if N>10 studies
+
+#### GRADE Assessment
+Certainty rated for each outcome.
+
+### Registration
+PROSPERO registration planned. Protocol DOI: pending."""
+
+    elif req.tool == "sample_size":
+        papers_ctx = ""
+        if req.papers:
+            for i, p in enumerate(req.papers[:6], 1):
+                papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) — {(p.get('abstract','') or '')[:350]}"
+        topic = req.query or "the proposed study"
+        prompt = f"""You are a biostatistician. Perform a sample size calculation for: {topic}
+
+Evidence base (to extract effect sizes and control event rates):{papers_ctx}
+
+## 🧮 Sample Size Calculation
+
+### Parameters Extracted from Evidence
+- Control event rate (CER): [%] — source: [paper]
+- Expected effect size: OR/RR/MD = [value]  — source: [paper]
+- Standard deviation (if continuous): [value]
+
+### Primary Calculation
+
+**For dichotomous outcome (two proportions):**
+- Alpha (type I error): 0.05 (two-tailed)
+- Power (1-beta): 80% / 90%
+- CER: [%]
+- EER: [%]
+- n per group: [N]
+- Total N: [2N]
+
+**For continuous outcome (two means):**
+- Effect size (Cohen's d): [value]
+- n per group: [N]
+- Total N: [2N]
+
+### Adjusted Sample Size
+Accounting for:
+- Expected dropout (15%): adjusted N = [value]
+- 2:1 randomisation ratio: n_treatment=[X], n_control=[Y]
+- Stratification factors: [minimal inflation]
+
+### Sensitivity Table
+| Power | Alpha | Expected Effect | N per arm | Total N |
+|-------|-------|----------------|-----------|---------|
+| 80% | 0.05 | [base] | | |
+| 90% | 0.05 | [base] | | |
+| 80% | 0.05 | [base × 0.75] | | |
+
+### Feasibility Assessment
+- Is this sample size feasible? Recruitment rate from literature: [X/year]
+- Estimated recruitment time: [months]
+- Multi-centre requirement: [yes/no]
+
+### Software/Formula Reference
+G*Power formula used. Verify with: G*Power 3.1 / pwr package in R."""
+
     elif req.tool == "translation":
         paper = (req.papers or [{}])[0]
         title = paper.get("title", req.query or "")
