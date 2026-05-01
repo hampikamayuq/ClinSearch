@@ -970,6 +970,11 @@ async function fetchQuota() {
 
 function updateQuotaUI() {
   const pill=document.getElementById('quotaPill');
+  if(S.quota.unlimited || S.quota.limit == null) {
+    pill.textContent='∞';
+    pill.className='quota-pill qp-ok';
+    return;
+  }
   const rem=S.quota.limit-S.quota.used;
   pill.textContent=`${S.quota.used}/${S.quota.limit}`;
   pill.className='quota-pill '+(rem>5?'qp-ok':rem>0?'qp-low':'qp-out');

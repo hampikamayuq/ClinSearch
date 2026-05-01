@@ -51,7 +51,7 @@ S2_API_KEY     = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
 
 TIMEOUT = 20
 
-FREE_DAILY_LIMIT = 20
+FREE_DAILY_LIMIT = None
 _DB_PATH = "/tmp/clinsearch.db"
 
 def _init_db():
@@ -217,6 +217,8 @@ def get_user(token: str) -> Optional[dict]:
 
 
 def check_quota(user_id: str) -> bool:
+    if FREE_DAILY_LIMIT is None:
+        return True
     today = datetime.utcnow().date().isoformat()
     conn = sqlite3.connect(_DB_PATH)
     row = conn.execute("SELECT count, date FROM quotas WHERE user_id=?", (user_id,)).fetchone()
@@ -466,6 +468,8 @@ async def fulltext(doi: str):
 
 @app.get("/api/quota")
 async def get_quota(token: Optional[str] = None):
+    if FREE_DAILY_LIMIT is None:
+        return {"used": 0, "limit": None, "remaining": None, "unlimited": True}
     user_id = "anonymous"
     if token:
         user = get_user(token)
