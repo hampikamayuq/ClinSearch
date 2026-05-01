@@ -393,28 +393,108 @@ async def call_groq(messages: list, key: str) -> str:
 async def search_all(
     q: str,
     n: int = 5,
+    offset: int = 0,
     year_from: Optional[int] = None,
+    year_to: Optional[int] = None,
     open_access: bool = False,
-    reviews_only: bool = False
+    reviews_only: bool = False,
+    study_type: Optional[str] = None,
+    sources: Optional[str] = None,
 ):
-    """Parallel search across all sources."""
+    """Parallel search across selected sources with dedup and study-type classification."""
+    requested = set((sources or "pubmed,s2,openalex").split(","))
     pubmed_q = q + (" AND (Review[pt] OR Meta-Analysis[pt])" if reviews_only else "")
-    tasks = [
-        _pubmed_search(pubmed_q, n, year_from, open_access),
-        _s2_search(q, n, year_from, open_access),
-        _openalex_search(q, n, year_from, open_access, "review" if reviews_only else None),
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    coros = []
+    if "pubmed" in requested:
+        coros.append(_pubmed_search(pubmed_q, n, year_from, open_access))
+    if "s2" in requested:
+        coros.append(_s2_search(q, n, year_from, open_access))
+    if "openalex" in requested:
+        coros.append(_openalex_search(q, n, year_from, open_access,
+                                      "review" if reviews_only else None))
+    if "europepmc" in requested or "cochrane" in requested:
+        coros.append(_europepmc_search(q, n, offset, year_from, year_to,
+                                       open_access, "cochrane" in requested or reviews_only))
+
+    if not coros:
+        coros = [
+            _pubmed_search(pubmed_q, n, year_from, open_access),
+            _s2_search(q, n, year_from, open_access),
+            _openalex_search(q, n, year_from, open_access, None),
+        ]
+
+    results = await asyncio.gather(*coros, return_exceptions=True)
     combined = []
     for r in results:
         if isinstance(r, list):
             combined.extend(r)
-    return {"results": combined, "total": len(combined), "query": q}
+
+    for p in combined:
+        if not p.get("study_type"):
+            p["study_type"] = _classify_study_type(
+                p.get("title", ""), p.get("abstract", "")
+            )
+
+    deduped = _dedupe(combined)
+
+    if study_type and study_type.lower() not in ("all", ""):
+        deduped = [p for p in deduped
+                   if (p.get("study_type") or "").lower() == study_type.lower()]
+
+    return {"results": deduped, "total": len(deduped), "query": q,
+            "sources_used": list(requested)}
 
 
 @app.get("/api/pubmed")
 async def pubmed(q: str, n: int = 10, year_from: Optional[int] = None, free_only: bool = False):
     return {"results": await _pubmed_search(q, n, year_from, free_only), "source": "PubMed"}
+
+
+@app.get("/api/europepmc")
+async def europepmc_endpoint(q: str, n: int = 10, offset: int = 0,
+                              year_from: Optional[int] = None, year_to: Optional[int] = None,
+                              oa_only: bool = False, systematic_only: bool = False):
+    results = await _europepmc_search(q, n, offset, year_from, year_to, oa_only, systematic_only)
+    return {"results": results, "total": len(results), "source": "Europe PMC"}
+
+
+@app.get("/api/mesh-suggest")
+async def mesh_suggest(q: str):
+    """MeSH term autocomplete via NLM API."""
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(
+                "https://id.nlm.nih.gov/mesh/suggest",
+                params={"label": q, "format": "json"}
+            )
+            if r.status_code == 200:
+                hits = r.json().get("hits", [])
+                terms = [h.get("label", "") for h in hits[:10] if h.get("label")]
+                return {"suggestions": terms}
+    except Exception as e:
+        logger.warning(f"MeSH suggest error: {e}")
+    return {"suggestions": []}
+
+
+@app.get("/api/check-journal")
+async def check_journal(journal: str):
+    """Check journal quality via DOAJ API."""
+    if not journal or len(journal) < 3:
+        return {"indexed": None, "doaj": None, "score": "unknown"}
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(
+                "https://doaj.org/api/search/journals",
+                params={"q": journal, "pageSize": 1}
+            )
+            if r.status_code == 200:
+                data = r.json()
+                if data.get("total", 0) > 0:
+                    return {"indexed": True, "doaj": True, "score": "trusted"}
+    except Exception as e:
+        logger.warning(f"DOAJ check error: {e}")
+    return {"indexed": False, "doaj": False, "score": "unknown"}
 
 
 @app.get("/api/trials")
@@ -596,6 +676,120 @@ async def _openalex_search(q, n=5, year_from=None, oa_only=False, study_type=Non
                  "source":"OpenAlex"} for w in works]
     except Exception as e:
         logger.warning(f"OpenAlex search error: {e}")
+        return []
+
+
+def _classify_study_type(title: str, abstract: str) -> str:
+    """Quick regex-based study type classifier for cards."""
+    text = (f"{title} {abstract}").lower()
+    if re.search(r'systematic.{0,10}review|meta.?analysis|cochrane.{0,10}review', text):
+        return "SR/MA"
+    if re.search(r'randomized controlled trial|randomised controlled trial|\brct\b|randomized.{0,20}trial|randomised.{0,20}trial', text):
+        return "RCT"
+    if re.search(r'phase (i|ii|iii|iv)\b|double.blind|placebo.controlled', text):
+        return "RCT"
+    if re.search(r'\bcohort\b|case.?control|observational|cross.?sectional', text):
+        return "Observational"
+    if re.search(r'case report|case series|case presentation', text):
+        return "Case Report"
+    if re.search(r'guideline|recommendation|consensus statement|practice parameter', text):
+        return "Guideline"
+    return ""
+
+
+def _dedupe(papers: list) -> list:
+    """Deduplicate papers by DOI, PMID, or title prefix (keep highest-cited)."""
+    sorted_p = sorted(papers, key=lambda x: int(x.get("citations") or 0), reverse=True)
+    seen_doi, seen_pmid, seen_title = set(), set(), set()
+    out = []
+    for p in sorted_p:
+        doi = (p.get("doi") or "").lower().strip()
+        pmid = str(p.get("pmid") or "").strip()
+        title_key = re.sub(r"\W+", "", (p.get("title") or "").lower())[:40]
+        if doi and doi in seen_doi:
+            continue
+        if pmid and pmid in seen_pmid:
+            continue
+        if title_key and len(title_key) > 10 and title_key in seen_title:
+            continue
+        if doi:
+            seen_doi.add(doi)
+        if pmid:
+            seen_pmid.add(pmid)
+        if title_key and len(title_key) > 10:
+            seen_title.add(title_key)
+        out.append(p)
+    return out
+
+
+async def _europepmc_search(q: str, n: int = 10, offset: int = 0,
+                             year_from: int = None, year_to: int = None,
+                             oa_only: bool = False, systematic_only: bool = False) -> list:
+    """Search Europe PMC — 42M+ articles including Cochrane Systematic Reviews."""
+    query = q
+    if year_from or year_to:
+        y1 = year_from or 1900
+        y2 = year_to or 2099
+        query += f" AND FIRST_PDATE:[{y1}-01-01 TO {y2}-12-31]"
+    if oa_only:
+        query += " AND OPEN_ACCESS:Y"
+    if systematic_only:
+        query += " AND (REVIEW_TYPE:SYSTEMATIC_REVIEW OR SRC:CBA)"
+    params = {
+        "query": query,
+        "resultType": "core",
+        "pageSize": min(n, 25),
+        "format": "json",
+        "sort": "CITED desc",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            r = await client.get(
+                "https://www.ebi.ac.uk/europepmc/webservices/rest/search",
+                params=params
+            )
+            r.raise_for_status()
+            data = r.json()
+        results = []
+        for p in data.get("resultList", {}).get("result", []):
+            doi = p.get("doi", "") or ""
+            pmid = str(p.get("pmid", "") or "")
+            authors = []
+            author_list = (p.get("authorList") or {}).get("author", [])
+            if isinstance(author_list, list):
+                for a in author_list[:3]:
+                    if isinstance(a, dict):
+                        ln = a.get("lastName", "") or ""
+                        ini = a.get("initials", "") or ""
+                        name = (ln + " " + ini).strip()
+                        if name:
+                            authors.append(name)
+            article_id = p.get("id", "") or ""
+            source_db = p.get("source", "MED")
+            ep_url = (f"https://europepmc.org/article/{source_db}/{article_id}"
+                      if article_id else "")
+            study_type = _classify_study_type(
+                p.get("title", "") or "",
+                p.get("abstractText", "") or ""
+            )
+            results.append({
+                "id": doi or pmid or article_id,
+                "title": p.get("title", "") or "",
+                "authors": authors,
+                "year": str(p.get("pubYear", "") or ""),
+                "journal": p.get("journalTitle", "") or "",
+                "abstract": (p.get("abstractText", "") or "")[:500],
+                "doi": doi,
+                "pmid": pmid,
+                "citations": p.get("citedByCount", 0) or 0,
+                "isOpenAccess": (p.get("isOpenAccess") or "N") == "Y",
+                "source": "Europe PMC",
+                "study_type": study_type,
+                "url": ep_url,
+            })
+        return results
+    except Exception as e:
+        logger.warning(f"Europe PMC search error: {e}")
         return []
 
 
@@ -1243,6 +1437,41 @@ async def export_papers(req: ExportRequest):
                 if doi: ref += f" https://doi.org/{doi}"
             refs.append(ref)
         return {"content": "\n\n".join(refs), "filename": "bibliography.txt", "mimetype": "text/plain"}
+
+    if req.format == "bibtex":
+        lines = []
+        for i, p in enumerate(papers):
+            authors_list = p.get("authors") or []
+            first_author = authors_list[0] if authors_list else ""
+            parts = first_author.split()
+            last_name = parts[-1] if parts else "Author"
+            key = last_name + str(p.get("year", "")) + str(i)
+            lines.append(f"@article{{{key},")
+            if authors_list:
+                joined = " and ".join(authors_list)
+                lines.append(f"  author  = {{{joined}}},")
+            title_val = p.get("title", "")
+            if title_val:
+                lines.append(f"  title   = {{{title_val}}},")
+            journal_val = p.get("journal", "")
+            if journal_val:
+                lines.append(f"  journal = {{{journal_val}}},")
+            year_val = p.get("year", "")
+            if year_val:
+                lines.append(f"  year    = {{{year_val}}},")
+            doi_val = p.get("doi", "")
+            if doi_val:
+                lines.append(f"  doi     = {{{doi_val}}},")
+            url_val = p.get("url", "")
+            if url_val and not doi_val:
+                lines.append(f"  url     = {{{url_val}}},")
+            lines.append("}")
+            lines.append("")
+        return {
+            "content": "\n".join(lines),
+            "filename": "references.bib",
+            "mimetype": "application/x-bibtex",
+        }
 
     return {"error": "Unknown format"}
 
@@ -2498,6 +2727,128 @@ For EACH paper, return a JSON array (no markdown, just JSON) with this structure
 ]
 
 Assess ALL {len(papers)} papers. Return only the JSON array."""
+
+    elif req.tool == "quadas2":
+        paper_title = (req.papers or [{}])[0].get("title", req.query or "")
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:3], 1):
+            abstract_excerpt = (p.get("abstract", "") or "")[:600]
+            papers_ctx += f"\n[{i}] {p.get('title','')} ({p.get('year','')}) | {p.get('journal','')}\nAbstract: {abstract_excerpt}\n"
+        prompt = f"""You are a systematic reviewer trained in QUADAS-2.
+
+Apply QUADAS-2 to this diagnostic accuracy study:
+{papers_ctx}
+
+## QUADAS-2 Assessment
+
+Rate each domain as LOW / HIGH / UNCLEAR risk and give 1-2 sentence rationale.
+
+### Domain 1: Patient Selection
+Signalling: consecutive/random sample? case-control design avoided? no inappropriate exclusions?
+**Risk of bias:** [LOW/HIGH/UNCLEAR]
+**Applicability concern:** [LOW/HIGH/UNCLEAR]
+**Rationale:**
+
+### Domain 2: Index Test
+Signalling: results interpreted blinded to reference standard? threshold pre-specified?
+**Risk of bias:** [LOW/HIGH/UNCLEAR]
+**Applicability concern:** [LOW/HIGH/UNCLEAR]
+**Rationale:**
+
+### Domain 3: Reference Standard
+Signalling: reference standard likely correct? interpreted blinded to index test?
+**Risk of bias:** [LOW/HIGH/UNCLEAR]
+**Applicability concern:** [LOW/HIGH/UNCLEAR]
+**Rationale:**
+
+### Domain 4: Flow and Timing
+Signalling: appropriate interval? same reference standard for all? all patients in analysis?
+**Risk of bias:** [LOW/HIGH/UNCLEAR]
+**Rationale:**
+
+## Summary Table
+| Domain | Risk of Bias | Applicability |
+|--------|-------------|---------------|
+| Patient Selection | | |
+| Index Test | | |
+| Reference Standard | | |
+| Flow and Timing | — | |
+
+## Overall Assessment
+Overall bias risk and implication for GRADE certainty of diagnostic evidence."""
+
+    elif req.tool == "publication_bias":
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:10], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')}) | Citations: {p.get('citations',0)}\nAbstract: {(p.get('abstract','') or '')[:300]}\n\n"
+        n_papers = len(req.papers or [])
+        prompt = f"""You are a meta-analyst specializing in publication bias assessment.
+
+Analyze these {n_papers} papers for publication bias:
+
+{papers_ctx}
+
+## Publication Bias Analysis
+
+### 1. Funnel Plot Data (estimated)
+Generate estimated funnel plot coordinates as JSON:
+{{"funnel_data": [{{"study": "Author Year", "effect": 0.0, "se": 0.0, "weight": 1.0}}]}}
+
+### 2. Asymmetry Assessment
+- Direction of funnel asymmetry (if detectable)
+- Egger's test interpretation (likely result based on study characteristics)
+- Most likely explanation: small-study effects, reporting bias, heterogeneity
+
+### 3. Trim-and-Fill Estimate
+- Estimated missing studies (low/moderate/high number)
+- Expected direction of adjusted effect
+
+### 4. Evidence of Selective Reporting
+- Overrepresentation of statistically significant findings?
+- Missing negative/null trials?
+- Time-lag bias indicators?
+
+### 5. GRADE Impact
+Should publication bias downgrade evidence certainty? (Undetected / Suspected / Strongly suspected)
+
+### 6. Recommended Actions
+Specific steps to address publication bias in this evidence base."""
+
+    elif req.tool == "coi_detector":
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:8], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')}) | {p.get('journal','')}\nAbstract: {(p.get('abstract','') or '')[:400]}\n\n"
+        topic = req.query or ""
+        prompt = f"""You are an evidence-based medicine expert analyzing conflicts of interest.
+
+Analyze these papers on '{topic}' for funding and COI signals:
+
+{papers_ctx}
+
+## Conflict of Interest Analysis
+
+### 1. Funding Source Detection
+For each paper, identify funding signals from abstract/affiliations:
+| Paper | Likely Funding | Type (Industry/Public/Mixed/NR) |
+|-------|---------------|----------------------------------|
+
+### 2. Industry Influence Indicators
+| Paper | Industry Link | Spin Risk | Notes |
+|-------|-------------|-----------|-------|
+
+### 3. COI Red Flags
+- Industry-funded trials with exclusively positive results
+- Statistical significance patterns (p-hacking signals)
+- Outcome reporting inconsistencies
+- Author-industry financial links (if mentioned)
+
+### 4. Aggregate Assessment
+- Proportion with industry funding signals: X/Y papers
+- Overall COI risk: LOW / MODERATE / HIGH
+- Impact on reliability of this evidence base
+
+### 5. Recommendations
+What additional COI information is needed and where to find it."""
 
     else:
         raise HTTPException(400, "Unknown tool")

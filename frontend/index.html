@@ -28,6 +28,15 @@
   --mono:'DM Mono',monospace;
   --r:10px;
 }
+[data-theme="light"]{
+  --bg:#f3f6fa;--s1:#ffffff;--s2:#edf0f5;--s3:#e4e8ef;
+  --b1:#d4dae4;--b2:#bfc6d3;--b3:#aab3c3;
+  --text:#1a2535;--muted:#526070;--dim:#8a9bb0;
+  --accent:#009e80;--a2:#0076a8;--gold:#a07010;
+  --red:#c04040;--green:#1e8a50;--blue:#2a5ea8;--purple:#5a4da0;
+}
+[data-theme="light"] body::before{background-image:linear-gradient(rgba(0,158,128,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,158,128,.03) 1px,transparent 1px)}
+[data-theme="light"] header{background:rgba(243,246,250,.95)}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
 body{font-family:var(--sans);background:var(--bg);color:var(--text);display:flex;flex-direction:column}
@@ -149,6 +158,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .src-pm{background:rgba(232,184,75,.1);color:var(--gold)}
 .src-s2{background:rgba(91,143,212,.1);color:var(--blue)}
 .src-oa{background:rgba(0,150,212,.1);color:var(--a2)}
+.src-epmc{background:rgba(155,143,212,.12);color:var(--purple)}
 .r-meta{font-size:.71rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.28rem;align-items:center;margin-bottom:.28rem}
 .r-sep{color:var(--b2)}
 .ev{font-size:.62rem;padding:.1rem .38rem;border-radius:3px;font-weight:600}
@@ -156,6 +166,32 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .ev-sr{background:rgba(91,143,212,.12);color:var(--blue)}
 .ev-ma{background:rgba(0,212,170,.12);color:var(--accent)}
 .ev-ct{background:rgba(232,184,75,.12);color:var(--gold)}
+.ev-observational{background:rgba(232,184,75,.08);color:var(--gold)}
+.ev-casereport{background:rgba(155,143,212,.1);color:var(--purple)}
+.ev-guideline{background:rgba(0,212,170,.08);color:var(--accent)}
+.badge-unverified{display:inline-block;font-size:.6rem;padding:.1rem .38rem;border-radius:3px;background:rgba(240,92,92,.12);color:var(--red);border:1px solid rgba(240,92,92,.25)}
+/* Filter panel */
+.filter-panel{padding:.6rem 1rem .5rem;border-top:1px solid var(--b1);background:var(--s1);display:none;flex-direction:column;gap:.5rem}
+.filter-panel.open{display:flex}
+.filter-row{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
+.filter-label{font-size:.68rem;font-family:var(--mono);color:var(--muted);white-space:nowrap;min-width:60px}
+.filter-chip{font-size:.63rem;font-family:var(--mono);padding:.12rem .42rem;border-radius:4px;background:var(--s2);color:var(--muted);border:1px solid var(--b1);cursor:pointer;transition:all .1s}
+.filter-chip.on{background:rgba(0,212,170,.07);color:var(--accent);border-color:rgba(0,212,170,.18)}
+.filter-range{display:flex;align-items:center;gap:.5rem}
+.filter-range input[type=range]{width:90px;accent-color:var(--accent)}
+.filter-range span{font-size:.68rem;font-family:var(--mono);color:var(--muted);min-width:36px;text-align:center}
+/* MeSH suggestions */
+.mesh-dropdown{position:absolute;bottom:100%;left:0;right:0;background:var(--s2);border:1px solid var(--b2);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto;z-index:200;display:none}
+.mesh-dropdown.open{display:block}
+.mesh-item{padding:.32rem .75rem;font-size:.75rem;cursor:pointer;color:var(--muted);transition:background .1s}
+.mesh-item:hover{background:var(--s3);color:var(--text)}
+/* Result sort/count bar */
+.results-bar{display:flex;align-items:center;gap:.5rem;font-size:.72rem;color:var(--muted);font-family:var(--mono);flex-wrap:wrap}
+.sort-select{font-size:.68rem;font-family:var(--mono);background:var(--s2);color:var(--muted);border:1px solid var(--b1);border-radius:4px;padding:.15rem .4rem;cursor:pointer;transition:border-color .1s}
+.sort-select:hover{border-color:var(--accent)}
+/* Load more */
+.load-more-btn{margin:.3rem 0 .6rem 2.8rem;padding:.42rem 1.2rem;background:none;border:1px solid var(--b2);color:var(--muted);border-radius:6px;font-size:.76rem;cursor:pointer;transition:all .12s;font-family:var(--sans)}
+.load-more-btn:hover{border-color:var(--accent);color:var(--accent)}
 .r-abs{font-size:.76rem;color:var(--muted);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
 .r-abs.open{-webkit-line-clamp:unset}
 .r-acts{margin-top:.42rem;display:flex;gap:.3rem;flex-wrap:wrap;align-items:center}
@@ -539,6 +575,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
     </div>
     <button style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .6rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .1s" onclick="toggleTools()">⚡ Tools</button>
     <button style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .6rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .1s" id="wsBtn" onclick="toggleWorkspace()">📁 Workspace <span id="wsCount" style="font-family:var(--mono);font-size:.62rem;color:var(--accent)"></span></button>
+    <button id="themeBtn" style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .55rem;border-radius:6px;font-size:.82rem;cursor:pointer;transition:all .1s" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
   </div>
 </header>
 
@@ -736,9 +773,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         💡 Query Builder active — I'll optimise your search terms
         <button class="qb-btn" onclick="toggleQB()">✕ disable</button>
       </div>
-      <div class="input-box">
+      <div class="input-box" style="position:relative">
+        <div class="mesh-dropdown" id="meshDropdown"></div>
         <div class="inp-row">
-          <textarea class="inp" id="inp" rows="1" placeholder="Ask a clinical question or enter a topic…" onkeydown="onKey(event)" oninput="resize(this)"></textarea>
+          <textarea class="inp" id="inp" rows="1" placeholder="Ask a clinical question or enter a topic…" onkeydown="onKey(event)" oninput="resize(this);debounceMeSH(this.value)"></textarea>
           <button class="send-btn" id="sendBtn" onclick="send()">
             <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </button>
@@ -747,12 +785,40 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
           <span class="chip on" data-t="pubmed">PubMed</span>
           <span class="chip on" data-t="s2">S. Scholar</span>
           <span class="chip on" data-t="openalex">OpenAlex</span>
+          <span class="chip" data-t="europepmc">Europe PMC</span>
+          <span class="chip" data-t="cochrane">🔵 Cochrane SR</span>
           <span class="chip on" data-t="trials">Trials</span>
           <span class="chip" data-t="pico" id="picoChip">PICO</span>
           <span class="chip" data-t="grade" id="gradeChip">GRADE</span>
           <span class="chip" data-t="rob" id="robChip">RoB</span>
           <span class="chip" data-t="qb" id="qbChip">🤖 Query Builder</span>
           <span class="more-chip" onclick="toggleTools()">+37 tools →</span>
+          <button onclick="toggleFilterPanel()" style="margin-left:auto;background:none;border:1px solid var(--b1);color:var(--muted);padding:.1rem .4rem;border-radius:4px;font-size:.63rem;cursor:pointer;font-family:var(--mono);transition:all .1s" id="filterToggleBtn">🔧 Filters</button>
+        </div>
+        <!-- Advanced filter panel -->
+        <div class="filter-panel" id="filterPanel">
+          <div class="filter-row">
+            <span class="filter-label">Year</span>
+            <div class="filter-range">
+              <span id="yearFromVal">1990</span>
+              <input type="range" id="yearFrom" min="1950" max="2025" value="1990" oninput="document.getElementById('yearFromVal').textContent=this.value">
+              <span>–</span>
+              <input type="range" id="yearTo" min="1950" max="2025" value="2025" oninput="document.getElementById('yearToVal').textContent=this.value">
+              <span id="yearToVal">2025</span>
+            </div>
+          </div>
+          <div class="filter-row">
+            <span class="filter-label">Study type</span>
+            <span class="filter-chip on" data-f="all">All</span>
+            <span class="filter-chip" data-f="RCT">🟢 RCT</span>
+            <span class="filter-chip" data-f="SR/MA">🔵 SR/MA</span>
+            <span class="filter-chip" data-f="Observational">🟡 Observational</span>
+            <span class="filter-chip" data-f="Guideline">📋 Guideline</span>
+          </div>
+          <div class="filter-row">
+            <span class="filter-label">Access</span>
+            <span class="filter-chip" id="oaOnlyChip" onclick="this.classList.toggle('on')">🔓 Open Access only</span>
+          </div>
         </div>
       </div>
     </div>
@@ -775,6 +841,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
     <div class="rsb-actions">
       <div style="font-size:.65rem;font-family:var(--mono);color:var(--dim);margin-bottom:.3rem">EXPORT WORKSPACE</div>
       <button class="rsb-export-btn" id="exp-ris" onclick="exportWS('ris',this)">📄 Export RIS (Zotero)</button>
+      <button class="rsb-export-btn" id="exp-bib" onclick="exportWS('bibtex',this)">📝 Export BibTeX (LaTeX)</button>
       <button class="rsb-export-btn" id="exp-csv" onclick="exportWS('csv',this)">📊 Export CSV (Rayyan)</button>
       <button class="rsb-export-btn" id="exp-van" onclick="exportWS('vancouver',this)">📖 Vancouver bibliography</button>
       <button class="rsb-export-btn" id="exp-sum" onclick="exportWS('summary',this)">🤖 AI synthesis of saved papers</button>
@@ -805,6 +872,7 @@ const S = {
   sessionId: null,
   mode: 'chat', qbActive: false,
   activeWizard: null,
+  _searchOffset: 0, _searchQuery: '', _allSearchPapers: [],
 };
 
 // Load saved
@@ -1067,120 +1135,215 @@ async function send() {
 }
 
 // ── Search Mode: cards first, AI synthesis after ──────────────────────────────
-async function searchMode(query) {
-  // User message
-  const uDiv=document.createElement('div');uDiv.className='msg';
-  uDiv.innerHTML=`<div class="msg-av av-u">U</div><div class="msg-body"><div class="msg-role">You</div><div class="msg-text">${esc(query)}</div></div>`;
-  document.getElementById('msgs').appendChild(uDiv);scrollBot();
+function getActiveFilters() {
+  const chips = [...document.querySelectorAll('.chip.on')].map(c=>c.dataset.t).filter(Boolean);
+  const srcs = chips.filter(t=>['pubmed','s2','openalex','europepmc','cochrane'].includes(t));
+  const studyChip = document.querySelector('.filter-chip.on[data-f]');
+  const studyType = (studyChip?.dataset.f === 'all' || !studyChip) ? '' : (studyChip?.dataset.f || '');
+  const oaOnly = document.getElementById('oaOnlyChip')?.classList.contains('on') || false;
+  const yearFrom = parseInt(document.getElementById('yearFrom')?.value || 0) || null;
+  const yearTo = parseInt(document.getElementById('yearTo')?.value || 0) || null;
+  return {srcs: srcs.length ? srcs : ['pubmed','s2','openalex'], studyType, oaOnly, yearFrom, yearTo};
+}
+
+function buildCardHtml(p) {
+  const srcMap = {
+    'PubMed':'src-pm','Semantic Scholar':'src-s2','OpenAlex':'src-oa',
+    'Europe PMC':'src-epmc','Cochrane':'src-epmc'
+  };
+  const srcLabel = {'Semantic Scholar':'S2','OpenAlex':'OA','Europe PMC':'EPMC'};
+  const authors = (p.authors||[]).slice(0,3).join(', ');
+  const abs = (p.abstract||'').slice(0,320);
+  const src = p.source||'';
+  const pmid = p.pmid||p.id||'';
+  const doi = p.doi||'';
+  const url = p.url||(pmid ? 'https://pubmed.ncbi.nlm.nih.gov/'+pmid+'/' : '#');
+  const studyType = p.study_type || (p.title?.match(/meta.?anal/i)?'SR/MA':p.title?.match(/\bsystematic\b/i)?'SR/MA':p.title?.match(/\bRCT\b|\brandomiz/i)?'RCT':'');
+  const stClass = studyType==='RCT'?'ev-rct':studyType==='SR/MA'?'ev-sr':studyType==='Observational'?'ev-observational':studyType==='Case Report'?'ev-casereport':studyType==='Guideline'?'ev-guideline':'';
+  const isOA = p.open_access||p.isOpenAccess||p.oa_url||false;
+  const cardId = 'card'+Math.random().toString(36).slice(2);
+  const paperKey = cachePaper(p);
+  return {cardId, html: `<div class="r-card" id="${cardId}">
+    <div class="r-top">
+      <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
+      <div style="display:flex;gap:.3rem;flex-shrink:0;align-items:center">
+        ${isOA?'<span class="badge-oa">OA</span>':''}
+        ${studyType?`<span class="ev ${stClass}">${studyType}</span>`:''}
+        ${src?`<span class="r-src ${srcMap[src]||''}">${srcLabel[src]||src}</span>`:''}
+      </div>
+    </div>
+    <div class="r-meta" id="${cardId}meta">
+      ${authors?`<span>${esc(authors)}</span>`:''}
+      ${p.year?`<span class="r-sep">·</span><span>${p.year}</span>`:''}
+      ${p.journal?`<span class="r-sep">·</span><em id="${cardId}jrnl">${esc(p.journal)}</em>`:''}
+      ${p.citations?`<span class="cites">⭐ ${p.citations}</span>`:''}
+    </div>
+    ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
+    <div class="r-acts">
+      <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
+      ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
+      <button class="rbtn rbtn-save" onclick="savePaperByKey('${paperKey}',this)">💾 Save</button>
+      ${(pmid||doi)?`<button class="rbtn" onclick="readFulltextByKey('${paperKey}',this)">📖 Read</button>`:''}
+      <button class="rbtn" onclick="showJournalClubByKey('${paperKey}')">📋 Journal Club</button>
+      <button class="rbtn" onclick="showPatientSummaryByKey('${paperKey}')">👤 Patient</button>
+      <button class="rbtn" onclick="showPICOByKey('${paperKey}')">🔬 PICO</button>
+      <button class="rbtn" onclick="showDrugInteractionByKey('${paperKey}')">💊 Interactions</button>
+      <button class="rbtn" onclick="showTranslationByKey('${paperKey}')">🌐 Translate</button>
+      <button class="rbtn" onclick="showRoBByKey('${paperKey}')">⚖️ RoB</button>
+      <button class="rbtn" onclick="showQUADAS2ByKey('${paperKey}')">🔬 QUADAS</button>
+      <button class="rbtn" onclick="showStatsCriticByKey('${paperKey}')">📐 Stats</button>
+      <button class="rbtn" onclick="showCMEQuestionsByKey('${paperKey}')">📚 CME</button>
+      ${(pmid||doi)?`<button class="rbtn" onclick="showCitationGraphByKey('${paperKey}')">🕸 Citations</button>`:''}
+      ${(p.url||doi)?`<button class="rbtn" onclick="analyzePDFByKey('${paperKey}')">📄 AI Read</button>`:''}
+    </div>
+  </div>`};
+}
+
+function sortResults(papers, order) {
+  const sorted = [...papers];
+  if(order === 'date_desc') sorted.sort((a,b)=>parseInt(b.year||0)-parseInt(a.year||0));
+  else if(order === 'date_asc') sorted.sort((a,b)=>parseInt(a.year||0)-parseInt(b.year||0));
+  else if(order === 'citations_desc') sorted.sort((a,b)=>parseInt(b.citations||0)-parseInt(a.citations||0));
+  else if(order === 'study_type') {
+    const rank = {'SR/MA':0,'RCT':1,'Guideline':2,'Observational':3,'Case Report':4,'':5};
+    sorted.sort((a,b)=>(rank[a.study_type||'']??5)-(rank[b.study_type||'']??5));
+  }
+  return sorted;
+}
+
+async function searchMode(query, appendToExisting) {
+  const filters = getActiveFilters();
+
+  if(!appendToExisting) {
+    // User message
+    const uDiv=document.createElement('div');uDiv.className='msg';
+    uDiv.innerHTML=`<div class="msg-av av-u">U</div><div class="msg-body"><div class="msg-role">You</div><div class="msg-text">${esc(query)}</div></div>`;
+    document.getElementById('msgs').appendChild(uDiv);scrollBot();
+  }
+
+  const offset = appendToExisting ? (S._searchOffset || 0) : 0;
+  S._searchQuery = query;
+  if(!appendToExisting) S._searchOffset = 0;
 
   // Loading indicator
   const loadDiv=document.createElement('div');loadDiv.className='msg';loadDiv.style.opacity='.7';
-  loadDiv.innerHTML=`<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="msg-role">ClinSearch AI</div><div class="msg-text" style="color:var(--muted);font-size:.82rem">🔍 Searching PubMed, Semantic Scholar, OpenAlex…</div></div>`;
+  const srcNames = filters.srcs.join(' · ').replace('s2','S2').replace('openalex','OpenAlex').replace('europepmc','Europe PMC').replace('cochrane','Cochrane');
+  loadDiv.innerHTML=`<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="msg-role">ClinSearch AI</div><div class="msg-text" style="color:var(--muted);font-size:.82rem">🔍 Searching ${srcNames}…</div></div>`;
   document.getElementById('msgs').appendChild(loadDiv);scrollBot();
 
   try {
-    const r=await fetch(`${API}/api/search?q=${encodeURIComponent(query)}&n=10`);
+    let url = `${API}/api/search?q=${encodeURIComponent(query)}&n=10&offset=${offset}`;
+    url += `&sources=${encodeURIComponent(filters.srcs.join(','))}`;
+    if(filters.oaOnly) url += '&open_access=true';
+    if(filters.yearFrom) url += `&year_from=${filters.yearFrom}`;
+    if(filters.yearTo && filters.yearTo < 2025) url += `&year_to=${filters.yearTo}`;
+    if(filters.studyType) url += `&study_type=${encodeURIComponent(filters.studyType)}`;
+
+    const r=await fetch(url);
     const d=await r.json();
     loadDiv.remove();
-    if(!d.results?.length){addMsg('ai','No papers found. Try a different search term.');document.getElementById('sendBtn').disabled=false;return;}
+    if(!d.results?.length) {
+      if(!appendToExisting) addMsg('ai','No papers found. Try different terms or enable more sources.');
+      else addMsg('ai','No more results found.');
+      document.getElementById('sendBtn').disabled=false;
+      return;
+    }
 
-    const papers=d.results;
-    S._lastRealResults=papers;
+    const rawPapers = d.results;
+    const papers = sortResults(rawPapers, document.getElementById('sortOrder')?.value || 'relevance');
+    S._searchOffset = offset + papers.length;
+
+    if(!appendToExisting) {
+      S._lastRealResults = papers;
+      S._allSearchPapers = papers;
+    } else {
+      S._allSearchPapers = [...(S._allSearchPapers||[]), ...papers];
+      S._lastRealResults = S._allSearchPapers;
+    }
+
     S.history.push({role:'user',content:query});
 
-    // Header + action bar
-    const hdr=document.createElement('div');
-    hdr.style.cssText='margin:.4rem 0 .2rem 2.8rem;display:flex;align-items:center;gap:.6rem';
-    hdr.innerHTML=`<span style="font-size:.75rem;color:var(--muted);font-family:var(--mono)">📄 <strong style="color:var(--text)">${papers.length} papers</strong> found across PubMed · S2 · OpenAlex</span>`;
-    document.getElementById('msgs').appendChild(hdr);
-    // Action buttons
-    const actBar=document.createElement('div');actBar.className='srch-actions';
-    const _q=query,_p=papers;
-    actBar.innerHTML=`
-      <button class="act-btn" onclick="showGapAnalysis(window._srchPapers,window._srchQuery)">🗺 Gaps</button>
-      <button class="act-btn" onclick="showHeadToHead(window._srchPapers,window._srchQuery)">⚖️ Head-to-Head</button>
-      <button class="act-btn" onclick="showForestPlot(window._srchPapers,window._srchQuery)">🌲 Forest Plot</button>
-      <button class="act-btn" onclick="showGuidelines(window._srchPapers,window._srchQuery)">📋 Guidelines</button>
-      <button class="act-btn" onclick="showDosing(window._srchPapers,window._srchQuery)">💊 Dosing</button>
-      <button class="act-btn" onclick="showDrugInteraction(window._srchPapers,window._srchQuery)">⚠️ Interactions</button>
-      <button class="act-btn" onclick="showAudioSummary(window._srchPapers,window._srchQuery)">🎙 Audio</button>
-      <button class="act-btn" onclick="showSlides(window._srchPapers,window._srchQuery)">🖥 Slides</button>
-      <button class="act-btn" onclick="openCaseSimulator()">🏥 Case Sim</button>
-      <button class="act-btn" onclick="showGradeTable(window._srchPapers,window._srchQuery)">📊 GRADE Table</button>
-      <button class="act-btn" onclick="showAdverseEvents(window._srchPapers,window._srchQuery)">🧬 Adverse Events</button>
-      <button class="act-btn" onclick="showNMA(window._srchPapers,window._srchQuery)">📡 Network MA</button>
-      <button class="act-btn" onclick="showCostEffectiveness(window._srchPapers,window._srchQuery)">💰 Cost-Effectiveness</button>
-      <button class="act-btn" onclick="showGrantProposal(window._srchPapers,window._srchQuery)">📝 Grant</button>
-      <button class="act-btn" onclick="showCMEQuestions(window._srchPapers,window._srchQuery)">📚 CME Quiz</button>
-      <button class="act-btn" onclick="showSRProtocol(window._srchPapers,window._srchQuery)">📋 SR Protocol</button>
-      <button class="act-btn" onclick="showSampleSize(window._srchPapers,window._srchQuery)">🧮 Sample Size</button>
-      <button class="act-btn" onclick="openSRScreen(window._srchPapers)">📋 Screen Papers</button>
-      <button class="act-btn" onclick="showContradictions(window._srchPapers,window._srchQuery)">⚡ Contradictions</button>
-      <button class="act-btn" onclick="saveSearchAlert(window._srchQuery)" style="border-color:rgba(0,212,170,.3)">🔔 Save Alert</button>
-    `;
-    window._srchPapers=papers; window._srchQuery=query;
-    document.getElementById('msgs').appendChild(actBar);
+    if(!appendToExisting) {
+      // Source breakdown
+      const srcCount = {};
+      papers.forEach(p=>{ srcCount[p.source||'?']=(srcCount[p.source||'?']||0)+1; });
+      const srcSummary = Object.entries(srcCount).map(([s,n])=>n+' '+s).join(' · ');
 
-    // Paper cards
-    const srcLabel={pubmed:'PubMed',semantic_scholar:'S2',openalex:'OA'};
-    const srcClass={pubmed:'src-pm',semantic_scholar:'src-s2',openalex:'src-oa'};
-    const cardsDiv=document.createElement('div');cardsDiv.style.cssText='margin:0 0 .6rem 2.8rem';
-    cardsDiv.innerHTML=`<div class="r-grid">${papers.map(p=>{
-      const authors=(p.authors||[]).slice(0,3).join(', ');
-      const abs=(p.abstract||'').slice(0,320);
-      const src=p.source||'';const pmid=p.pmid||p.id||'';const doi=p.doi||'';
-      const url=p.url||(pmid?`https://pubmed.ncbi.nlm.nih.gov/${pmid}/`:'#');
-      const evType=p.pub_type||(p.title?.match(/meta.?anal/i)?'MA':p.title?.match(/\bsystematic\b/i)?'SR':p.title?.match(/\bRCT\b|\brandomiz/i)?'RCT':'');
-      const isOA=p.open_access||p.isOpenAccess||p.oa_url||false;
-      const cardId='card'+Math.random().toString(36).slice(2);
-      const paperKey=cachePaper(p);
-      return`<div class="r-card" id="${cardId}">
-        <div class="r-top">
-          <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
-          <div style="display:flex;gap:.3rem;flex-shrink:0;align-items:center">
-            ${isOA?'<span class="badge-oa">OA</span>':''}
-            ${evType?`<span class="ev ev-${evType.toLowerCase()}">${evType}</span>`:''}
-            ${src?`<span class="r-src ${srcClass[src]||''}">${srcLabel[src]||src}</span>`:''}
-          </div>
-        </div>
-        <div class="r-meta" id="${cardId}meta">
-          ${authors?`<span>${esc(authors)}</span>`:''}
-          ${p.year?`<span class="r-sep">·</span><span>${p.year}</span>`:''}
-          ${p.journal?`<span class="r-sep">·</span><em>${esc(p.journal)}</em>`:''}
-          ${p.citations?`<span class="cites">⭐ ${p.citations}</span>`:''}
-        </div>
-        ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
-        <div class="r-acts">
-          <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
-          ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
-          <button class="rbtn rbtn-save" onclick="savePaperByKey('${paperKey}',this)">💾 Save</button>
-          ${pmid?`<button class="rbtn" onclick="readFulltextByKey('${paperKey}',this)">📖 Read</button>`:''}
-          <button class="rbtn" onclick="showJournalClubByKey('${paperKey}')">📋 Journal Club</button>
-          <button class="rbtn" onclick="showPatientSummaryByKey('${paperKey}')">👤 Patient</button>
-          <button class="rbtn" onclick="showPICOByKey('${paperKey}')">🔬 PICO</button>
-          <button class="rbtn" onclick="showDrugInteractionByKey('${paperKey}')">💊 Interactions</button>
-          <button class="rbtn" onclick="showTranslationByKey('${paperKey}')">🌐 Translate</button>
-          <button class="rbtn" onclick="showRoBByKey('${paperKey}')">⚖️ RoB</button>
-          <button class="rbtn" onclick="showStatsCriticByKey('${paperKey}')">📐 Stats</button>
-          <button class="rbtn" onclick="showCMEQuestionsByKey('${paperKey}')">📚 CME</button>
-          ${(pmid||doi)?`<button class="rbtn" onclick="showCitationGraphByKey('${paperKey}')">🕸 Citations</button>`:''}
-          ${(p.url||doi)?`<button class="rbtn" onclick="analyzePDFByKey('${paperKey}')">📄 AI Read</button>`:''}
-        </div>
-      </div>`;
-    }).join('')}</div>`;
+      // Header + sort bar
+      const hdr=document.createElement('div');
+      hdr.style.cssText='margin:.4rem 0 .2rem 2.8rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap';
+      hdr.innerHTML=`
+        <div class="results-bar">
+          <span>📄 <strong style="color:var(--text)">${papers.length} papers</strong> — ${srcSummary}</span>
+          <select class="sort-select" id="sortOrder" onchange="reorderCurrentResults()">
+            <option value="relevance">Sort: Relevance</option>
+            <option value="citations_desc">Most cited</option>
+            <option value="date_desc">Newest first</option>
+            <option value="date_asc">Oldest first</option>
+            <option value="study_type">By study type</option>
+          </select>
+        </div>`;
+      document.getElementById('msgs').appendChild(hdr);
+
+      // Action buttons
+      const actBar=document.createElement('div');actBar.className='srch-actions';
+      actBar.innerHTML=`
+        <button class="act-btn" onclick="showGapAnalysis(window._srchPapers,window._srchQuery)">🗺 Gaps</button>
+        <button class="act-btn" onclick="showHeadToHead(window._srchPapers,window._srchQuery)">⚖️ Head-to-Head</button>
+        <button class="act-btn" onclick="showForestPlot(window._srchPapers,window._srchQuery)">🌲 Forest Plot</button>
+        <button class="act-btn" onclick="showGuidelines(window._srchPapers,window._srchQuery)">📋 Guidelines</button>
+        <button class="act-btn" onclick="showDosing(window._srchPapers,window._srchQuery)">💊 Dosing</button>
+        <button class="act-btn" onclick="showDrugInteraction(window._srchPapers,window._srchQuery)">⚠️ Interactions</button>
+        <button class="act-btn" onclick="showAudioSummary(window._srchPapers,window._srchQuery)">🎙 Audio</button>
+        <button class="act-btn" onclick="showSlides(window._srchPapers,window._srchQuery)">🖥 Slides</button>
+        <button class="act-btn" onclick="openCaseSimulator()">🏥 Case Sim</button>
+        <button class="act-btn" onclick="showGradeTable(window._srchPapers,window._srchQuery)">📊 GRADE Table</button>
+        <button class="act-btn" onclick="showAdverseEvents(window._srchPapers,window._srchQuery)">🧬 Adverse Events</button>
+        <button class="act-btn" onclick="showNMA(window._srchPapers,window._srchQuery)">📡 Network MA</button>
+        <button class="act-btn" onclick="showCostEffectiveness(window._srchPapers,window._srchQuery)">💰 Cost-Effectiveness</button>
+        <button class="act-btn" onclick="showGrantProposal(window._srchPapers,window._srchQuery)">📝 Grant</button>
+        <button class="act-btn" onclick="showCMEQuestions(window._srchPapers,window._srchQuery)">📚 CME Quiz</button>
+        <button class="act-btn" onclick="showSRProtocol(window._srchPapers,window._srchQuery)">📋 SR Protocol</button>
+        <button class="act-btn" onclick="showSampleSize(window._srchPapers,window._srchQuery)">🧮 Sample Size</button>
+        <button class="act-btn" onclick="openSRScreen(window._srchPapers)">📋 Screen Papers</button>
+        <button class="act-btn" onclick="showContradictions(window._srchPapers,window._srchQuery)">⚡ Contradictions</button>
+        <button class="act-btn" onclick="showPublicationBias(window._srchPapers,window._srchQuery)">📉 Pub Bias</button>
+        <button class="act-btn" onclick="showCOIDetector(window._srchPapers,window._srchQuery)">💰 COI Check</button>
+        <button class="act-btn" onclick="openPRISMAModal()">📋 PRISMA</button>
+        <button class="act-btn" onclick="saveSearchAlert(window._srchQuery)" style="border-color:rgba(0,212,170,.3)">🔔 Save Alert</button>
+      `;
+      window._srchPapers=papers; window._srchQuery=query;
+      document.getElementById('msgs').appendChild(actBar);
+    } else {
+      window._srchPapers=S._allSearchPapers;
+    }
+
+    // Paper cards container
+    const cardsDiv=document.createElement('div');
+    cardsDiv.dataset.srchCards='1';
+    cardsDiv.style.cssText='margin:0 0 .3rem 2.8rem';
+    cardsDiv.innerHTML=`<div class="r-grid">${papers.map(p=>buildCardHtml(p).html).join('')}</div>`;
     document.getElementById('msgs').appendChild(cardsDiv);scrollBot();
 
-    // Async retraction check for each paper (non-blocking)
+    // Load more button
+    const lmBtn=document.createElement('button');
+    lmBtn.className='load-more-btn';
+    lmBtn.textContent='⬇ Load 10 more results';
+    lmBtn.onclick=()=>{ lmBtn.remove(); loadMoreSearch(); };
+    document.getElementById('msgs').appendChild(lmBtn);
+
+    // Async checks: retraction + journal quality
     papers.forEach(p=>{
-      if(p.doi||p.pmid) {
-        const cardId=cardsDiv.querySelector(`[id^="card"]`);
-        // find meta element by searching for the paper title
-        const cards=[...cardsDiv.querySelectorAll('.r-card')];
-        const card=cards.find(c=>c.querySelector('.r-title a')?.textContent?.slice(0,30)===p.title?.slice(0,30));
-        const metaEl=card?.querySelector('.r-meta');
-        if(metaEl) checkRetraction(p.doi||'',p.pmid||'',metaEl);
-      }
+      const cards=[...cardsDiv.querySelectorAll('.r-card')];
+      const card=cards.find(c=>c.querySelector('.r-title a')?.textContent?.slice(0,30)===p.title?.slice(0,30));
+      if(!card) return;
+      const metaEl=card.querySelector('.r-meta');
+      if(metaEl && (p.doi||p.pmid)) checkRetraction(p.doi||'',p.pmid||'',metaEl);
+      const jrnlEl=card.querySelector('[id$="jrnl"]');
+      if(jrnlEl && p.journal) checkJournalQuality(p.journal, jrnlEl);
     });
+
+    if(appendToExisting) return;
 
     // AI synthesis
     const synWrap=document.createElement('div');synWrap.className='msg';
@@ -1190,14 +1353,13 @@ async function searchMode(query) {
 
     let ctx=`[REAL PAPERS — cite every claim as [[N] Author, Year](URL), extract effect sizes, CI, p-values]\n`;
     papers.slice(0,8).forEach((p,i)=>{
-      ctx+=`\n[${i+1}] "${p.title}" — ${p.url||''}\n  ${(p.authors||[]).slice(0,3).join(', ')} (${p.year||''}) ${p.journal||''} | Citations: ${p.citations||'?'}\n  Abstract: ${(p.abstract||'').slice(0,700)}\n`;
+      ctx+=`\n[${i+1}] "${p.title}" — ${p.url||''}\n  ${(p.authors||[]).slice(0,3).join(', ')} (${p.year||''}) ${p.journal||''} | Citations: ${p.citations||'?'} | Study type: ${p.study_type||'?'}\n  Abstract: ${(p.abstract||'').slice(0,700)}\n`;
     });
 
     const synEl=document.getElementById(synId);
     const msgs=[{role:'system',content:buildSystemPrompt()+'\n\n'+ctx},{role:'user',content:`Synthesize the evidence on: ${query}`}];
-    let synResp='';
     try {
-      synResp=await callServerStream(msgs,S.session||'',chunk=>{synEl.innerHTML=mdToHtml(chunk);scrollBot();});
+      const synResp=await callServerStream(msgs,S.session||'',chunk=>{synEl.innerHTML=mdToHtml(chunk);scrollBot();});
       synEl.innerHTML=mdToHtml(synResp);
       injectSaveButtons(synEl);
       S.history.push({role:'assistant',content:synResp});
@@ -1205,6 +1367,36 @@ async function searchMode(query) {
     } catch(e){synEl.textContent='⚠️ Synthesis error: '+e.message;}
 
   } catch(e){loadDiv.remove();addMsg('ai','⚠️ Search error: '+e.message);}
+}
+
+async function loadMoreSearch() {
+  if(!S._searchQuery) return;
+  await searchMode(S._searchQuery, true);
+}
+
+function reorderCurrentResults() {
+  const order = document.getElementById('sortOrder')?.value || 'relevance';
+  const papers = sortResults(S._lastRealResults || [], order);
+  const allCards = [...document.querySelectorAll('[data-srch-cards="1"]')];
+  if(!allCards.length) return;
+  const lastCards = allCards[allCards.length-1];
+  const grid = lastCards.querySelector('.r-grid');
+  if(grid) grid.innerHTML = papers.map(p=>buildCardHtml(p).html).join('');
+}
+
+async function checkJournalQuality(journal, el) {
+  if(!journal) return;
+  try {
+    const r = await fetch(`${API}/api/check-journal?journal=${encodeURIComponent(journal)}`);
+    const d = await r.json();
+    if(d.score === 'unknown' && d.doaj === false) {
+      const badge = document.createElement('span');
+      badge.className = 'badge-unverified';
+      badge.title = 'Not found in DOAJ — verify journal quality';
+      badge.textContent = '⚠️';
+      el.after(badge);
+    }
+  } catch(e) {}
 }
 
 // ── Message helpers ───────────────────────────────────────────────────────────
@@ -1234,6 +1426,189 @@ function doneAllTC(baseid,count){for(let i=0;i<count;i++)doneTC(baseid,i);}
 function scrollBot(){const m=document.getElementById('msgs');m.scrollTop=m.scrollHeight;}
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
+
+// ── Dark / Light theme ────────────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const isLight = html.dataset.theme === 'light';
+  html.dataset.theme = isLight ? 'dark' : 'light';
+  document.getElementById('themeBtn').textContent = isLight ? '🌙' : '☀️';
+  localStorage.setItem('cs_theme', html.dataset.theme);
+}
+(function initTheme(){
+  const t = localStorage.getItem('cs_theme') || 'dark';
+  document.documentElement.dataset.theme = t;
+  const btn = document.getElementById('themeBtn');
+  if(btn) btn.textContent = t === 'light' ? '☀️' : '🌙';
+})();
+
+// ── Filter panel toggle ───────────────────────────────────────────────────────
+function toggleFilterPanel() {
+  const panel = document.getElementById('filterPanel');
+  panel.classList.toggle('open');
+  const btn = document.getElementById('filterToggleBtn');
+  btn.style.borderColor = panel.classList.contains('open') ? 'var(--accent)' : '';
+  btn.style.color = panel.classList.contains('open') ? 'var(--accent)' : '';
+}
+// Filter type chips (only one active at a time)
+document.querySelectorAll('.filter-chip[data-f]').forEach(c=>{
+  c.addEventListener('click', ()=>{
+    document.querySelectorAll('.filter-chip[data-f]').forEach(x=>x.classList.remove('on'));
+    c.classList.add('on');
+  });
+});
+
+// ── MeSH autocomplete ─────────────────────────────────────────────────────────
+let _meshTimer = null;
+function debounceMeSH(val) {
+  clearTimeout(_meshTimer);
+  if(S.mode !== 'search' || val.length < 3) { closeMeSH(); return; }
+  _meshTimer = setTimeout(()=>fetchMeSH(val), 450);
+}
+async function fetchMeSH(q) {
+  try {
+    const r = await fetch(`${API}/api/mesh-suggest?q=${encodeURIComponent(q)}`);
+    const d = await r.json();
+    const terms = d.suggestions || [];
+    const dd = document.getElementById('meshDropdown');
+    if(!terms.length || !dd) { closeMeSH(); return; }
+    dd.innerHTML = terms.map(t=>`<div class="mesh-item" onclick="applyMeSH('${t.replace(/'/g,"\\'")}')">🔬 ${t}</div>`).join('');
+    dd.classList.add('open');
+  } catch(e) { closeMeSH(); }
+}
+function closeMeSH() {
+  const dd = document.getElementById('meshDropdown');
+  if(dd) { dd.classList.remove('open'); dd.innerHTML = ''; }
+}
+function applyMeSH(term) {
+  const inp = document.getElementById('inp');
+  if(inp) inp.value = term;
+  closeMeSH();
+  inp?.focus();
+}
+document.addEventListener('click', e=>{ if(!e.target.closest('.input-box')) closeMeSH(); });
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e=>{
+  const tag = document.activeElement?.tagName;
+  const inInput = tag==='TEXTAREA'||tag==='INPUT'||tag==='SELECT';
+  if(e.key === 'Escape') {
+    document.querySelectorAll('.overlay').forEach(o=>o.style.display='none');
+    closeMeSH();
+    return;
+  }
+  if(inInput) return;
+  if(e.key === '/') { e.preventDefault(); document.getElementById('inp')?.focus(); }
+  if(e.ctrlKey && e.key === 'k') { e.preventDefault(); toggleFilterPanel(); }
+  if(e.ctrlKey && e.key === 'e') { e.preventDefault(); exportWS('ris'); }
+  if(e.ctrlKey && e.key === 'd') { e.preventDefault(); toggleTheme(); }
+});
+
+// ── AI Tool helpers: QUADAS-2, Publication Bias, COI ─────────────────────────
+function showQUADAS2ByKey(key) {
+  const p = paperByKey(key);
+  showAIToolResult('quadas2', [p], p.title||'', '🔬 QUADAS-2 Assessment');
+}
+
+async function showPublicationBias(papers, query) {
+  showAIToolResult('publication_bias', papers, query, '📉 Publication Bias Analysis');
+}
+
+async function showCOIDetector(papers, query) {
+  showAIToolResult('coi_detector', papers, query, '💰 Conflict of Interest Analysis');
+}
+
+async function showAIToolResult(tool, papers, query, title) {
+  const el = addMsg('ai', `⏳ Running ${title}…`, false);
+  try {
+    const r = await fetch(`${API}/api/ai-tool`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({tool, papers: (papers||[]).slice(0,8), query: query||''})
+    });
+    const d = await r.json();
+    if(el) { el.innerHTML = `<strong>${title}</strong><hr style="border-color:var(--b2);margin:.5rem 0">${mdToHtml(d.result||d.raw||'No result')}` ; }
+  } catch(e) { if(el) el.textContent = '⚠️ Error: '+e.message; }
+}
+
+// ── PRISMA 2020 Flow Diagram modal ────────────────────────────────────────────
+function openPRISMAModal() {
+  const m = document.getElementById('prismaModal');
+  if(m) { m.style.display='flex'; return; }
+  const modal = document.createElement('div');
+  modal.id = 'prismaModal';
+  modal.className = 'overlay';
+  modal.style.display = 'flex';
+  modal.innerHTML = `<div class="modal" style="max-width:540px;width:100%">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <strong>📋 PRISMA 2020 Flow Diagram</strong>
+      <button class="mbtn mbtn-c" onclick="document.getElementById('prismaModal').style.display='none'">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.8rem">
+      <div><label class="mlbl">Records from databases</label>
+        <input class="minp" id="pr_db" type="number" placeholder="e.g. 1247"></div>
+      <div><label class="mlbl">After deduplication</label>
+        <input class="minp" id="pr_dedup" type="number" placeholder="e.g. 920"></div>
+      <div><label class="mlbl">Screened (title/abstract)</label>
+        <input class="minp" id="pr_screen" type="number" placeholder="e.g. 920"></div>
+      <div><label class="mlbl">Excluded at screening</label>
+        <input class="minp" id="pr_excl_screen" type="number" placeholder="e.g. 850"></div>
+      <div><label class="mlbl">Full-texts assessed</label>
+        <input class="minp" id="pr_ft" type="number" placeholder="e.g. 70"></div>
+      <div><label class="mlbl">Full-texts excluded</label>
+        <input class="minp" id="pr_excl_ft" type="number" placeholder="e.g. 48"></div>
+      <div style="grid-column:1/-1"><label class="mlbl">Studies included</label>
+        <input class="minp" id="pr_incl" type="number" placeholder="e.g. 22"></div>
+    </div>
+    <button class="mbtn mbtn-s" onclick="generatePRISMASVG()" style="width:100%;margin-bottom:.5rem">📊 Generate Diagram</button>
+    <div id="prismaSVGout"></div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function generatePRISMASVG() {
+  const get = id => parseInt(document.getElementById(id)?.value)||0;
+  const db=get('pr_db'),dedup=get('pr_dedup'),screen=get('pr_screen'),
+        exclScreen=get('pr_excl_screen'),ft=get('pr_ft'),exclFT=get('pr_excl_ft'),incl=get('pr_incl');
+  const W=480,bW=180,bH=44,xL=20,xR=W-bW-20,xC=(W-bW)/2,pad=16;
+  const boxStyle='fill:var(--s2);stroke:var(--b2);stroke-width:1.5';
+  const arrStyle='stroke:var(--muted);stroke-width:1.5;marker-end:url(#arrowhead)';
+  const txt=(x,y,t,size=12,color='var(--text)')=>`<text x="${x}" y="${y}" font-size="${size}" fill="${color}" text-anchor="middle" font-family="DM Mono,monospace">${t}</text>`;
+  const box=(x,y,label,val)=>`<rect x="${x}" y="${y}" width="${bW}" height="${bH}" rx="6" ${boxStyle}/>
+    ${txt(x+bW/2,y+bH/2-6,label,10)}${txt(x+bW/2,y+bH/2+8,String(val),13,'var(--accent)')}`;
+  const arr=(x1,y1,x2,y2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${arrStyle}/>`;
+  const H=340;
+  const y1=20,y2=90,y3=160,y4=230,y5=300;
+  const cx=xC+bW/2, rx=xR+bW/2;
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" style="background:var(--s1);border-radius:8px;border:1px solid var(--b1)">
+    <defs><marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="var(--muted)"/></marker></defs>
+    ${box(xC,y1,'Records identified',db)}
+    ${arr(cx,y1+bH,cx,y2)}
+    ${box(xC,y2,'After deduplication',dedup)}
+    ${arr(cx,y2+bH,cx,y3)}
+    ${box(xC,y3,'Titles/abstracts screened',screen)}
+    ${arr(cx,y3+bH/2,xR,y3+bH/2)} ${box(xR,y3,'Excluded',exclScreen)}
+    ${arr(cx,y3+bH,cx,y4)}
+    ${box(xC,y4,'Full-texts assessed',ft)}
+    ${arr(cx,y4+bH/2,xR,y4+bH/2)} ${box(xR,y4,'Excluded',exclFT)}
+    ${arr(cx,y4+bH,cx,y5)}
+    ${box(xC,y5,'Studies included',incl)}
+    ${txt(xC+bW/2,y5+bH+18,'PRISMA 2020 Flow Diagram',10,'var(--muted)')}
+  </svg>`;
+  const out = document.getElementById('prismaSVGout');
+  if(out) {
+    out.innerHTML = svg + `<button class="mbtn mbtn-s" onclick="downloadPRISMA()" style="width:100%;margin-top:.5rem">⬇ Download SVG</button>`;
+    window._prismaSVG = svg;
+  }
+}
+
+function downloadPRISMA() {
+  if(!window._prismaSVG) return;
+  const blob = new Blob([window._prismaSVG], {type:'image/svg+xml'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'prisma_flow.svg';
+  a.click();
+}
 
 let _paperSeq = 0;
 window._paperCache = window._paperCache || {};
@@ -1862,40 +2237,9 @@ async function renderPaperCards(query, afterEl) {
     if(!d.results?.length) return;
     const papers = d.results.slice(0,8);
     S._lastRealResults = papers;
-    const srcLabel = {pubmed:'PubMed', semantic_scholar:'S2', openalex:'OA'};
-    const srcClass = {pubmed:'src-pm', semantic_scholar:'src-s2', openalex:'src-oa'};
     const container = document.createElement('div');
     container.style.cssText = 'margin:.5rem 0 .5rem 2.8rem';
-    container.innerHTML = `<div style="font-size:.72rem;color:var(--muted);margin-bottom:.4rem;font-family:var(--mono)">📄 ${papers.length} papers encontrados</div><div class="r-grid">${
-      papers.map(p => {
-        const authors = (p.authors||[]).slice(0,3).join(', ');
-        const abs = (p.abstract||'').slice(0,280);
-        const src = p.source||'';
-        const pmid = p.pmid||p.id||'';
-        const doi = p.doi||'';
-        const url = p.url || (pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : '#');
-        const paperKey = cachePaper(p);
-        return `<div class="r-card">
-          <div class="r-top">
-            <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
-            ${src?`<span class="r-src ${srcClass[src]||''}">${srcLabel[src]||src}</span>`:''}
-          </div>
-          <div class="r-meta">
-            <span>${esc(authors)}</span>
-            ${p.year?`<span class="r-sep">·</span><span>${p.year}</span>`:''}
-            ${p.journal?`<span class="r-sep">·</span><span><em>${esc(p.journal)}</em></span>`:''}
-            ${p.citations?`<span class="cites">⭐ ${p.citations}</span>`:''}
-          </div>
-          ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
-          <div class="r-acts">
-            <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
-            ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
-            <button class="rbtn rbtn-save" onclick="savePaperByKey('${paperKey}',this)">💾 Save</button>
-            ${pmid?`<button class="rbtn" onclick="readFulltextByKey('${paperKey}',this)">📖 Read</button>`:''}
-          </div>
-        </div>`;
-      }).join('')
-    }</div>`;
+    container.innerHTML = `<div style="font-size:.72rem;color:var(--muted);margin-bottom:.4rem;font-family:var(--mono)">📄 ${papers.length} papers found</div><div class="r-grid">${papers.map(p=>buildCardHtml(p).html).join('')}</div>`;
     if(afterEl) afterEl.after(container);
     else document.getElementById('msgs').appendChild(container);
   } catch(e) {}
