@@ -1128,7 +1128,7 @@ async function searchMode(query) {
       const evType=p.pub_type||(p.title?.match(/meta.?anal/i)?'MA':p.title?.match(/\bsystematic\b/i)?'SR':p.title?.match(/\bRCT\b|\brandomiz/i)?'RCT':'');
       const isOA=p.open_access||p.isOpenAccess||p.oa_url||false;
       const cardId='card'+Math.random().toString(36).slice(2);
-      const pJson=JSON.stringify(p).replace(/'/g,"\\'");
+      const paperKey=cachePaper(p);
       return`<div class="r-card" id="${cardId}">
         <div class="r-top">
           <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
@@ -1148,18 +1148,18 @@ async function searchMode(query) {
         <div class="r-acts">
           <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
           ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
-          <button class="rbtn rbtn-save" onclick='saveToWorkspace(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'  >💾 Save</button>
-          ${pmid?`<button class="rbtn" onclick='readFulltext(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(pmid))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")),this)'>📖 Read</button>`:''}
-          <button class="rbtn" onclick='showJournalClub(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(pmid))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.title||''))}")))'>📋 Journal Club</button>
-          <button class="rbtn" onclick='showPatientSummary(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>👤 Patient</button>
-          <button class="rbtn" onclick='showPICO(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>🔬 PICO</button>
-          <button class="rbtn" onclick='showDrugInteraction([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.title||''))}")))'>💊 Interactions</button>
-          <button class="rbtn" onclick='showTranslation(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>🌐 Translate</button>
-          <button class="rbtn" onclick='showRoB(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>⚖️ RoB</button>
-          <button class="rbtn" onclick='showStatsCritic(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>📐 Stats</button>
-          <button class="rbtn" onclick='showCMEQuestions([JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}"))], JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.title||''))}")))'>📚 CME</button>
-          ${pmid?`<button class="rbtn" onclick='showCitationGraph(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(pmid))}")),"")'>🕸 Citations</button>`:(doi?`<button class="rbtn" onclick='showCitationGraph("",JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")))'>🕸 Citations</button>`:'')}
-          ${(p.url||doi)?`<button class="rbtn" onclick='analyzePDF(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.url||''))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p.title||''))}")))'>📄 AI Read</button>`:''}
+          <button class="rbtn rbtn-save" onclick="savePaperByKey('${paperKey}',this)">💾 Save</button>
+          ${pmid?`<button class="rbtn" onclick="readFulltextByKey('${paperKey}',this)">📖 Read</button>`:''}
+          <button class="rbtn" onclick="showJournalClubByKey('${paperKey}')">📋 Journal Club</button>
+          <button class="rbtn" onclick="showPatientSummaryByKey('${paperKey}')">👤 Patient</button>
+          <button class="rbtn" onclick="showPICOByKey('${paperKey}')">🔬 PICO</button>
+          <button class="rbtn" onclick="showDrugInteractionByKey('${paperKey}')">💊 Interactions</button>
+          <button class="rbtn" onclick="showTranslationByKey('${paperKey}')">🌐 Translate</button>
+          <button class="rbtn" onclick="showRoBByKey('${paperKey}')">⚖️ RoB</button>
+          <button class="rbtn" onclick="showStatsCriticByKey('${paperKey}')">📐 Stats</button>
+          <button class="rbtn" onclick="showCMEQuestionsByKey('${paperKey}')">📚 CME</button>
+          ${(pmid||doi)?`<button class="rbtn" onclick="showCitationGraphByKey('${paperKey}')">🕸 Citations</button>`:''}
+          ${(p.url||doi)?`<button class="rbtn" onclick="analyzePDFByKey('${paperKey}')">📄 AI Read</button>`:''}
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -1229,6 +1229,45 @@ function doneAllTC(baseid,count){for(let i=0;i<count;i++)doneTC(baseid,i);}
 function scrollBot(){const m=document.getElementById('msgs');m.scrollTop=m.scrollHeight;}
 function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
+
+let _paperSeq = 0;
+window._paperCache = window._paperCache || {};
+function cachePaper(p) {
+  const key = 'p' + (++_paperSeq);
+  window._paperCache[key] = p || {};
+  return key;
+}
+function paperByKey(key) { return (window._paperCache || {})[key] || {}; }
+function savePaperByKey(key, btn) { savePaper(paperByKey(key), btn); }
+function readFulltextByKey(key, btn) {
+  const p = paperByKey(key);
+  return readFulltext(p.pmid || p.id || '', p.doi || '', btn);
+}
+function showJournalClubByKey(key) {
+  const p = paperByKey(key);
+  return showJournalClub(p.pmid || p.id || '', p.doi || '', p.title || '');
+}
+function showPatientSummaryByKey(key) { return showPatientSummary(paperByKey(key)); }
+function showPICOByKey(key) { return showPICO(paperByKey(key)); }
+function showDrugInteractionByKey(key) {
+  const p = paperByKey(key);
+  return showDrugInteraction([p], p.title || '');
+}
+function showTranslationByKey(key) { return showTranslation(paperByKey(key)); }
+function showRoBByKey(key) { return showRoB(paperByKey(key)); }
+function showStatsCriticByKey(key) { return showStatsCritic(paperByKey(key)); }
+function showCMEQuestionsByKey(key) {
+  const p = paperByKey(key);
+  return showCMEQuestions([p], p.title || '');
+}
+function showCitationGraphByKey(key) {
+  const p = paperByKey(key);
+  return showCitationGraph(p.pmid || p.id || '', p.doi || '');
+}
+function analyzePDFByKey(key) {
+  const p = paperByKey(key);
+  return analyzePDF(p.url || '', p.doi || '', p.title || '');
+}
 
 // ── Agentic context fetch (client-side, for BYOK) ─────────────────────────────
 const SEARCH_RE = /\b(evidence|papers?|studi(es|y)|trial|systematic|meta.?analysis|treatment|efficacy|versus|compar|review|biolog|drug|therap|intervention|outcome|rct|placebo|guidelines?|adverse|safety|mechanism|acne|cancer|diabetes|hypertension|infection|therapy|syndrome|disease|disorder|artigo|estudo|tratamento|evidencia|revisão|ensaio|eficacia|terapia|medicamento|doença|sintoma|diagnóstico|farmaco|droga|terapêutica|gerenciamento|manejo)\b/i;
@@ -1830,6 +1869,7 @@ async function renderPaperCards(query, afterEl) {
         const pmid = p.pmid||p.id||'';
         const doi = p.doi||'';
         const url = p.url || (pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : '#');
+        const paperKey = cachePaper(p);
         return `<div class="r-card">
           <div class="r-top">
             <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
@@ -1845,8 +1885,8 @@ async function renderPaperCards(query, afterEl) {
           <div class="r-acts">
             <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
             ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
-            <button class="rbtn rbtn-save" onclick='saveToWorkspace(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(p))}")))'>💾 Save</button>
-            ${pmid?`<button class="rbtn" onclick='readFulltext(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(pmid))}")),JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(doi))}")),this)'>📖 Read</button>`:''}
+            <button class="rbtn rbtn-save" onclick="savePaperByKey('${paperKey}',this)">💾 Save</button>
+            ${pmid?`<button class="rbtn" onclick="readFulltextByKey('${paperKey}',this)">📖 Read</button>`:''}
           </div>
         </div>`;
       }).join('')
@@ -2145,6 +2185,7 @@ async function preprintsMode(query) {
       const url=p.url||'#';
       const serverClass=p.server==='medrxiv'?'src-pm':'src-s2';
       const serverLabel=p.server==='medrxiv'?'medRxiv':'bioRxiv';
+      const paperKey=cachePaper({id:p.doi||p.url,title:p.title,authors:typeof p.authors==="string"?[p.authors]:(p.authors||[]),year:(p.date||"").slice(0,4),doi:p.doi,url:p.url,source:p.server,abstract:p.abstract});
       return `<div class="r-card">
         <div class="r-top">
           <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
@@ -2161,8 +2202,8 @@ async function preprintsMode(query) {
         <div class="r-acts">
           <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
           ${p.doi?`<a class="rbtn" href="https://doi.org/${p.doi}" target="_blank" rel="noopener">DOI</a>`:''}
-          <button class="rbtn rbtn-save" onclick='saveToWorkspace(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify({id:p.doi||p.url,title:p.title,authors:typeof p.authors==="string"?[p.authors]:(p.authors||[]),year:(p.date||"").slice(0,4),doi:p.doi,url:p.url,source:p.server}))}")))'>💾 Save</button>
-          <button class="rbtn" onclick='showPICO(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify({title:p.title,abstract:p.abstract}))}")))'>🔬 PICO</button>
+          <button class="rbtn rbtn-save" onclick="savePaperByKey('${paperKey}',this)">💾 Save</button>
+          <button class="rbtn" onclick="showPICOByKey('${paperKey}')">🔬 PICO</button>
         </div>
       </div>`;
     }).join('')}</div>`;
