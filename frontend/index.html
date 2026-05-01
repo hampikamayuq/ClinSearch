@@ -787,19 +787,106 @@ async function send() {
   document.getElementById('welcome')?.remove();
   inp.value='';inp.style.height='auto';
   document.getElementById('sendBtn').disabled=true;
-  addMsg('user',text);
-  S.history.push({role:'user',content:text});
 
-  // Build context from wizard
-  if(S.activeWizard){
-    text=`[${S.activeWizard.toUpperCase()}] ${text}`;
-    S.activeWizard=null;
+  if(S.mode==='search') {
+    await searchMode(text);
+  } else {
+    addMsg('user',text);
+    S.history.push({role:'user',content:text});
+    if(S.activeWizard){text=`[${S.activeWizard.toUpperCase()}] ${text}`;S.activeWizard=null;}
+    if(S.isDemo){await demoReply(text);}
+    else{await aiReply(text);}
   }
-
-  if(S.isDemo){await demoReply(text);}
-  else{await aiReply(text);}
   document.getElementById('sendBtn').disabled=false;
   scrollBot();
+}
+
+// ── Search Mode: cards first, AI synthesis after ──────────────────────────────
+async function searchMode(query) {
+  // User message
+  const uDiv=document.createElement('div');uDiv.className='msg';
+  uDiv.innerHTML=`<div class="msg-av av-u">U</div><div class="msg-body"><div class="msg-role">You</div><div class="msg-text">${esc(query)}</div></div>`;
+  document.getElementById('msgs').appendChild(uDiv);scrollBot();
+
+  // Loading indicator
+  const loadDiv=document.createElement('div');loadDiv.className='msg';loadDiv.style.opacity='.7';
+  loadDiv.innerHTML=`<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="msg-role">ClinSearch AI</div><div class="msg-text" style="color:var(--muted);font-size:.82rem">🔍 Searching PubMed, Semantic Scholar, OpenAlex…</div></div>`;
+  document.getElementById('msgs').appendChild(loadDiv);scrollBot();
+
+  try {
+    const r=await fetch(`${API}/api/search?q=${encodeURIComponent(query)}&n=10`);
+    const d=await r.json();
+    loadDiv.remove();
+    if(!d.results?.length){addMsg('ai','No papers found. Try a different search term.');document.getElementById('sendBtn').disabled=false;return;}
+
+    const papers=d.results;
+    S._lastRealResults=papers;
+    S.history.push({role:'user',content:query});
+
+    // Header
+    const hdr=document.createElement('div');
+    hdr.style.cssText='margin:.4rem 0 .3rem 2.8rem;display:flex;align-items:center;gap:.6rem';
+    hdr.innerHTML=`<span style="font-size:.75rem;color:var(--muted);font-family:var(--mono)">📄 <strong style="color:var(--text)">${papers.length} papers</strong> found across PubMed · S2 · OpenAlex</span>`;
+    document.getElementById('msgs').appendChild(hdr);
+
+    // Paper cards
+    const srcLabel={pubmed:'PubMed',semantic_scholar:'S2',openalex:'OA'};
+    const srcClass={pubmed:'src-pm',semantic_scholar:'src-s2',openalex:'src-oa'};
+    const cardsDiv=document.createElement('div');cardsDiv.style.cssText='margin:0 0 .6rem 2.8rem';
+    cardsDiv.innerHTML=`<div class="r-grid">${papers.map(p=>{
+      const authors=(p.authors||[]).slice(0,3).join(', ');
+      const abs=(p.abstract||'').slice(0,320);
+      const src=p.source||'';const pmid=p.pmid||p.id||'';const doi=p.doi||'';
+      const url=p.url||(pmid?`https://pubmed.ncbi.nlm.nih.gov/${pmid}/`:'#');
+      const evType=p.pub_type||(p.title?.match(/meta.?anal/i)?'MA':p.title?.match(/\bsystematic\b/i)?'SR':p.title?.match(/\bRCT\b|\brandomiz/i)?'RCT':'');
+      return`<div class="r-card">
+        <div class="r-top">
+          <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
+          <div style="display:flex;gap:.3rem;flex-shrink:0">
+            ${evType?`<span class="ev ev-${evType.toLowerCase()}">${evType}</span>`:''}
+            ${src?`<span class="r-src ${srcClass[src]||''}">${srcLabel[src]||src}</span>`:''}
+          </div>
+        </div>
+        <div class="r-meta">
+          ${authors?`<span>${esc(authors)}</span>`:''}
+          ${p.year?`<span class="r-sep">·</span><span>${p.year}</span>`:''}
+          ${p.journal?`<span class="r-sep">·</span><em>${esc(p.journal)}</em>`:''}
+          ${p.citations?`<span class="cites">⭐ ${p.citations}</span>`:''}
+        </div>
+        ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
+        <div class="r-acts">
+          <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
+          ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
+          <button class="rbtn rbtn-save" onclick='saveToWorkspace(${JSON.stringify(p)})'>💾 Save</button>
+          ${pmid?`<button class="rbtn" onclick="readFulltext('${pmid}','${doi}','${esc(p.title||'')}')">📖 Read</button>`:''}
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+    document.getElementById('msgs').appendChild(cardsDiv);scrollBot();
+
+    // AI synthesis
+    const synWrap=document.createElement('div');synWrap.className='msg';
+    const synId='syn'+Date.now();
+    synWrap.innerHTML=`<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="msg-role">ClinSearch AI — Evidence Synthesis</div><div class="msg-text" id="${synId}" style="color:var(--muted);font-size:.82rem">⚡ Synthesizing ${papers.length} papers…</div></div>`;
+    document.getElementById('msgs').appendChild(synWrap);scrollBot();
+
+    let ctx=`[REAL PAPERS — cite every claim as [[N] Author, Year](URL), extract effect sizes, CI, p-values]\n`;
+    papers.slice(0,8).forEach((p,i)=>{
+      ctx+=`\n[${i+1}] "${p.title}" — ${p.url||''}\n  ${(p.authors||[]).slice(0,3).join(', ')} (${p.year||''}) ${p.journal||''} | Citations: ${p.citations||'?'}\n  Abstract: ${(p.abstract||'').slice(0,700)}\n`;
+    });
+
+    const synEl=document.getElementById(synId);
+    const msgs=[{role:'system',content:buildSystemPrompt()+'\n\n'+ctx},{role:'user',content:`Synthesize the evidence on: ${query}`}];
+    let synResp='';
+    try {
+      synResp=await callServerStream(msgs,S.session||'',chunk=>{synEl.innerHTML=mdToHtml(chunk);scrollBot();});
+      synEl.innerHTML=mdToHtml(synResp);
+      injectSaveButtons(synEl);
+      S.history.push({role:'assistant',content:synResp});
+      saveSession();
+    } catch(e){synEl.textContent='⚠️ Synthesis error: '+e.message;}
+
+  } catch(e){loadDiv.remove();addMsg('ai','⚠️ Search error: '+e.message);}
 }
 
 // ── Message helpers ───────────────────────────────────────────────────────────
@@ -831,7 +918,7 @@ function esc(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 
 // ── Agentic context fetch (client-side, for BYOK) ─────────────────────────────
-const SEARCH_RE = /\b(evidence|papers?|studi(es|y)|trial|systematic|meta.?analysis|treatment|efficacy|versus|compar|review|biolog|drug|therap|intervention|outcome|rct|placebo|guidelines?|adverse|safety|mechanism)\b/i;
+const SEARCH_RE = /\b(evidence|papers?|studi(es|y)|trial|systematic|meta.?analysis|treatment|efficacy|versus|compar|review|biolog|drug|therap|intervention|outcome|rct|placebo|guidelines?|adverse|safety|mechanism|acne|cancer|diabetes|hypertension|infection|therapy|syndrome|disease|disorder|artigo|estudo|tratamento|evidencia|revisão|ensaio|eficacia|terapia|medicamento|doença|sintoma|diagnóstico|farmaco|droga|terapêutica|gerenciamento|manejo)\b/i;
 
 async function fetchSearchContext(query) {
   if(!SEARCH_RE.test(query)) return '';
