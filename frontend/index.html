@@ -159,6 +159,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .src-s2{background:rgba(91,143,212,.1);color:var(--blue)}
 .src-oa{background:rgba(0,150,212,.1);color:var(--a2)}
 .src-epmc{background:rgba(155,143,212,.12);color:var(--purple)}
+.src-who{background:rgba(62,207,142,.1);color:var(--green)}
 .r-meta{font-size:.71rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:.28rem;align-items:center;margin-bottom:.28rem}
 .r-sep{color:var(--b2)}
 .ev{font-size:.62rem;padding:.1rem .38rem;border-radius:3px;font-weight:600}
@@ -410,7 +411,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.6rem}
 @media(max-width:500px){.calc-grid{grid-template-columns:1fr}}
 .calc-field label{display:block;font-size:.69rem;color:var(--muted);margin-bottom:.2rem}
-.calc-field input,.calc-field select{width:100%;background:var(--bg);border:1px solid var(--b2);border-radius:6px;padding:.35rem .55rem;color:var(--text);font-size:.81rem;font-family:var(--sans);outline:none}
+.calc-field input,.calc-field select,.calc-input{width:100%;background:var(--bg);border:1px solid var(--b2);border-radius:6px;padding:.35rem .55rem;color:var(--text);font-size:.81rem;font-family:var(--sans);outline:none}
+.calc-input{display:block;margin-top:.2rem}
 .calc-field input:focus,.calc-field select:focus{border-color:var(--accent)}
 .calc-result{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.65rem;margin-top:.5rem;font-size:.8rem;line-height:1.6}
 .calc-result .score{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--accent)}
@@ -764,6 +766,72 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
           <div id="sofaResult" class="calc-result" style="display:none"></div>
         </div>
 
+        <!-- LR / Pre-Post Probability -->
+        <div class="calc-section">
+          <div class="calc-title">🧮 Pre/Post-Test Probability <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(Fagan nomogram)</span></div>
+          <div class="calc-grid">
+            <div class="calc-field"><label>Pre-test probability (%)</label><input class="calc-input" id="lrPretest" type="number" min="0" max="100" value="20" oninput="calcLR()"></div>
+            <div class="calc-field"><label>Sensitivity (%)</label><input class="calc-input" id="lrSens" type="number" min="0" max="100" value="85" oninput="calcLR()"></div>
+            <div class="calc-field"><label>Specificity (%)</label><input class="calc-input" id="lrSpec" type="number" min="0" max="100" value="90" oninput="calcLR()"></div>
+          </div>
+          <div id="lrResult" class="calc-result" style="display:none"></div>
+        </div>
+
+        <!-- HEART Score -->
+        <div class="calc-section">
+          <div class="calc-title">❤️ HEART Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(chest pain risk)</span></div>
+          <div class="calc-grid">
+            <div class="calc-field"><label>History</label>
+              <select id="heartHistory" onchange="calcHEART()">
+                <option value="0">Slightly suspicious (0)</option>
+                <option value="1">Moderately suspicious (1)</option>
+                <option value="2">Highly suspicious (2)</option>
+              </select></div>
+            <div class="calc-field"><label>EKG</label>
+              <select id="heartEKG" onchange="calcHEART()">
+                <option value="0">Normal (0)</option>
+                <option value="1">Non-specific repol disturbance (1)</option>
+                <option value="2">Significant ST deviation (2)</option>
+              </select></div>
+            <div class="calc-field"><label>Age</label>
+              <select id="heartAge" onchange="calcHEART()">
+                <option value="0">&lt; 45 (0)</option>
+                <option value="1">45–64 (1)</option>
+                <option value="2">≥ 65 (2)</option>
+              </select></div>
+            <div class="calc-field"><label>Risk Factors</label>
+              <select id="heartRF" onchange="calcHEART()">
+                <option value="0">No known risk factors (0)</option>
+                <option value="1">1–2 risk factors (1)</option>
+                <option value="2">≥3 RF or DM or atherosclerosis (2)</option>
+              </select></div>
+            <div class="calc-field"><label>Troponin</label>
+              <select id="heartTrop" onchange="calcHEART()">
+                <option value="0">≤ normal limit (0)</option>
+                <option value="1">1–3× normal (1)</option>
+                <option value="2">&gt; 3× normal (2)</option>
+              </select></div>
+          </div>
+          <div id="heartResult" class="calc-result" style="display:none"></div>
+        </div>
+
+        <!-- Revised Geneva Score (PE) -->
+        <div class="calc-section">
+          <div class="calc-title">🫁 Revised Geneva Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(PE probability)</span></div>
+          <div class="calc-check-grid" id="genevachecks">
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> Age &gt; 65 (+1)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> Previous DVT or PE (+3)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> Surgery or fracture within 1 month (+2)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> Active cancer (+2)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> Unilateral lower limb pain (+3)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> Haemoptysis (+2)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> HR 75–94 bpm (+3)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> HR ≥ 95 bpm (+5)</label>
+            <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> Pain on lower limb deep vein palpation and unilateral edema (+4)</label>
+          </div>
+          <div id="genevaResult" class="calc-result" style="display:none"></div>
+        </div>
+
       </div>
     </div>
 
@@ -787,6 +855,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
           <span class="chip on" data-t="openalex">OpenAlex</span>
           <span class="chip" data-t="europepmc">Europe PMC</span>
           <span class="chip" data-t="cochrane">🔵 Cochrane SR</span>
+          <span class="chip" data-t="who">🌍 WHO IRIS</span>
           <span class="chip on" data-t="trials">Trials</span>
           <span class="chip" data-t="pico" id="picoChip">PICO</span>
           <span class="chip" data-t="grade" id="gradeChip">GRADE</span>
@@ -1137,7 +1206,7 @@ async function send() {
 // ── Search Mode: cards first, AI synthesis after ──────────────────────────────
 function getActiveFilters() {
   const chips = [...document.querySelectorAll('.chip.on')].map(c=>c.dataset.t).filter(Boolean);
-  const srcs = chips.filter(t=>['pubmed','s2','openalex','europepmc','cochrane'].includes(t));
+  const srcs = chips.filter(t=>['pubmed','s2','openalex','europepmc','cochrane','who'].includes(t));
   const studyChip = document.querySelector('.filter-chip.on[data-f]');
   const studyType = (studyChip?.dataset.f === 'all' || !studyChip) ? '' : (studyChip?.dataset.f || '');
   const oaOnly = document.getElementById('oaOnlyChip')?.classList.contains('on') || false;
@@ -1149,9 +1218,9 @@ function getActiveFilters() {
 function buildCardHtml(p) {
   const srcMap = {
     'PubMed':'src-pm','Semantic Scholar':'src-s2','OpenAlex':'src-oa',
-    'Europe PMC':'src-epmc','Cochrane':'src-epmc'
+    'Europe PMC':'src-epmc','Cochrane':'src-epmc','WHO IRIS':'src-who'
   };
-  const srcLabel = {'Semantic Scholar':'S2','OpenAlex':'OA','Europe PMC':'EPMC'};
+  const srcLabel = {'Semantic Scholar':'S2','OpenAlex':'OA','Europe PMC':'EPMC','WHO IRIS':'WHO'};
   const authors = (p.authors||[]).slice(0,3).join(', ');
   const abs = (p.abstract||'').slice(0,320);
   const src = p.source||'';
@@ -1310,6 +1379,14 @@ async function searchMode(query, appendToExisting) {
         <button class="act-btn" onclick="showPublicationBias(window._srchPapers,window._srchQuery)">📉 Pub Bias</button>
         <button class="act-btn" onclick="showCOIDetector(window._srchPapers,window._srchQuery)">💰 COI Check</button>
         <button class="act-btn" onclick="openPRISMAModal()">📋 PRISMA</button>
+        <button class="act-btn" onclick="showAIToolResult('evidence_score',window._srchPapers,window._srchQuery,'⭐ Evidence Quality Score')">⭐ Evidence Score</button>
+        <button class="act-btn" onclick="showAIToolResult('absolute_risk',window._srchPapers,window._srchQuery,'📊 Absolute Risk / NNT Analysis')">📊 Absolute Risk</button>
+        <button class="act-btn" onclick="showAIToolResult('subgroup_analysis',window._srchPapers,window._srchQuery,'👥 Subgroup Analysis')">👥 Subgroups</button>
+        <button class="act-btn" onclick="showAIToolResult('systematic_comparison',window._srchPapers,window._srchQuery,'⚖️ Systematic Comparison Table')">⚖️ Compare Papers</button>
+        <button class="act-btn" onclick="showAIToolResult('replication_check',window._srchPapers,window._srchQuery,'🔄 Replication Assessment')">🔄 Replication</button>
+        <button class="act-btn" onclick="showAIToolResult('open_science',window._srchPapers,window._srchQuery,'🔓 Open Science Scorecard')">🔓 Open Science</button>
+        <button class="act-btn" onclick="showAIToolResult('pretest_prob',window._srchPapers,window._srchQuery,'🧮 Pre/Post-Test Probability')">🧮 Probability</button>
+        <button class="act-btn" onclick="showAIToolResult('mechanism',window._srchPapers,window._srchQuery,'⚗️ Mechanism of Action')">⚗️ Mechanism</button>
         <button class="act-btn" onclick="saveSearchAlert(window._srchQuery)" style="border-color:rgba(0,212,170,.3)">🔔 Save Alert</button>
       `;
       window._srchPapers=papers; window._srchQuery=query;
@@ -2809,6 +2886,60 @@ function calcSOFA() {
   const el=document.getElementById('sofaResult');
   el.style.display='block';
   el.innerHTML=`<div class="score">${s}</div><div class="risk">Predicted mortality: <strong>${mort}</strong></div><div class="rec">${s>=11?'<strong style="color:#ff5050">Very high risk — consider ICU escalation</strong>':s>=7?'High risk — close monitoring':s>=2?'Moderate risk':'Low risk'}</div>`;
+}
+
+// ── LR / Pre-Post Probability Calculator ─────────────────────────────────────
+function calcLR() {
+  const pre = parseFloat(document.getElementById('lrPretest')?.value||'0') / 100;
+  const sens = parseFloat(document.getElementById('lrSens')?.value||'0') / 100;
+  const spec = parseFloat(document.getElementById('lrSpec')?.value||'0') / 100;
+  if(isNaN(pre)||isNaN(sens)||isNaN(spec)||spec>=1) return;
+  const lrPlus = sens / (1 - spec);
+  const lrMinus = (1 - sens) / spec;
+  const preOdds = pre / (1 - pre);
+  const postOddsPos = preOdds * lrPlus;
+  const postOddsNeg = preOdds * lrMinus;
+  const postPos = Math.round(postOddsPos / (1 + postOddsPos) * 100);
+  const postNeg = Math.round(postOddsNeg / (1 + postOddsNeg) * 100);
+  const el = document.getElementById('lrResult');
+  el.style.display = 'block';
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.3rem">
+      <div><div class="score" style="font-size:1.3rem">${lrPlus.toFixed(1)}</div><div class="risk">LR+ (positive test)</div></div>
+      <div><div class="score" style="font-size:1.3rem">${lrMinus.toFixed(2)}</div><div class="risk">LR− (negative test)</div></div>
+    </div>
+    <div class="rec">If <strong>positive</strong>: post-test probability = <strong>${postPos}%</strong> (was ${Math.round(pre*100)}%)</div>
+    <div class="rec">If <strong>negative</strong>: post-test probability = <strong>${postNeg}%</strong> (was ${Math.round(pre*100)}%)</div>
+    <div class="rec" style="margin-top:.3rem">${lrPlus>=10?'🟢 Excellent positive test':''}${lrPlus>=5&&lrPlus<10?'🟡 Good positive test':''}${lrMinus<=0.1?'🟢 Excellent negative test':''}${lrMinus>0.1&&lrMinus<=0.2?'🟡 Good negative test':''}</div>`;
+}
+
+// ── HEART Score ───────────────────────────────────────────────────────────────
+function calcHEART() {
+  const s = parseInt(document.getElementById('heartHistory')?.value||'0') +
+            parseInt(document.getElementById('heartEKG')?.value||'0') +
+            parseInt(document.getElementById('heartAge')?.value||'0') +
+            parseInt(document.getElementById('heartRF')?.value||'0') +
+            parseInt(document.getElementById('heartTrop')?.value||'0');
+  const risk = s<=3?'Low (1.7% MACE at 6 weeks)':s<=6?'Moderate (12% MACE)':'High (65% MACE)';
+  const action = s<=3?'Consider early discharge — serial troponin':s<=6?'Admit for further evaluation':'Urgent intervention — cardiology consult';
+  const col = s<=3?'var(--green)':s<=6?'var(--gold)':'var(--red)';
+  const el = document.getElementById('heartResult');
+  el.style.display = 'block';
+  el.innerHTML = `<div class="score" style="color:${col}">${s}/10</div><div class="risk" style="color:${col}"><strong>${risk}</strong></div><div class="rec">${action}</div>`;
+}
+
+// ── Revised Geneva Score ──────────────────────────────────────────────────────
+function calcGeneva() {
+  const pts = [1,3,2,2,3,2,3,5,4];
+  const checks = document.querySelectorAll('#genevachecks input[type=checkbox]');
+  let s = 0;
+  checks.forEach((c,i)=>{ if(c.checked) s += pts[i]||0; });
+  const risk = s<=1?'Low (8% PE probability)':s<=4?'Intermediate (28%)':s<=6?'High (74%)':'Very High (&gt;85%)';
+  const action = s<=1?'D-dimer if low pre-test probability confirmed':s<=4?'D-dimer or CT-PA depending on clinical judgment':'CT pulmonary angiography indicated';
+  const col = s<=1?'var(--green)':s<=4?'var(--gold)':'var(--red)';
+  const el = document.getElementById('genevaResult');
+  el.style.display = 'block';
+  el.innerHTML = `<div class="score" style="color:${col}">${s} pts</div><div class="risk" style="color:${col}"><strong>${risk}</strong></div><div class="rec">${action}</div>`;
 }
 
 // ── PWA service worker registration ──────────────────────────────────────────

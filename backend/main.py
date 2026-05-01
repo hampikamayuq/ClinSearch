@@ -416,6 +416,8 @@ async def search_all(
     if "europepmc" in requested or "cochrane" in requested:
         coros.append(_europepmc_search(q, n, offset, year_from, year_to,
                                        open_access, "cochrane" in requested or reviews_only))
+    if "who" in requested:
+        coros.append(_who_iris_search(q, n))
 
     if not coros:
         coros = [
@@ -495,6 +497,63 @@ async def check_journal(journal: str):
     except Exception as e:
         logger.warning(f"DOAJ check error: {e}")
     return {"indexed": False, "doaj": False, "score": "unknown"}
+
+
+async def _who_iris_search(q: str, n: int = 10) -> list:
+    """Search WHO IRIS knowledge base (guidelines, technical reports, policy briefs)."""
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            r = await client.get(
+                "https://iris.who.int/rest/search",
+                params={"query": q, "expand": "metadata", "limit": min(n, 20), "offset": 0}
+            )
+            if r.status_code != 200:
+                return []
+            items = r.json()
+        results = []
+        for item in (items if isinstance(items, list) else []):
+            meta = {}
+            for m in (item.get("metadata") or []):
+                k = m.get("key", "")
+                v = m.get("value", "")
+                if k and v and k not in meta:
+                    meta[k] = v
+            title = meta.get("dc.title", "")
+            if not title:
+                continue
+            abstract = (meta.get("dc.description.abstract", "")
+                        or meta.get("dc.description", ""))
+            year = (meta.get("dc.date.issued", "") or "")[:4]
+            doi = meta.get("dc.identifier.doi", "")
+            handle = meta.get("dc.identifier.uri", "")
+            if not handle:
+                h = item.get("handle", "")
+                handle = f"https://iris.who.int/handle/{h}" if h else ""
+            author = (meta.get("dc.creator", "")
+                      or meta.get("dc.contributor.author", ""))
+            results.append({
+                "id": doi or handle,
+                "title": title,
+                "authors": [author] if author else ["World Health Organization"],
+                "year": year,
+                "journal": "WHO Publications",
+                "abstract": (abstract or "")[:500],
+                "doi": doi,
+                "url": handle,
+                "source": "WHO IRIS",
+                "study_type": _classify_study_type(title, abstract or ""),
+                "isOpenAccess": True,
+            })
+        return results
+    except Exception as e:
+        logger.warning(f"WHO IRIS search error: {e}")
+        return []
+
+
+@app.get("/api/who-iris")
+async def who_iris_endpoint(q: str, n: int = 10):
+    results = await _who_iris_search(q, n)
+    return {"results": results, "total": len(results), "source": "WHO IRIS"}
 
 
 @app.get("/api/trials")
@@ -2813,6 +2872,305 @@ Should publication bias downgrade evidence certainty? (Undetected / Suspected / 
 
 ### 6. Recommended Actions
 Specific steps to address publication bias in this evidence base."""
+
+    elif req.tool == "evidence_score":
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:10], 1):
+            st = p.get("study_type", "")
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')}) | Design: {st or 'unknown'} | Journal: {p.get('journal','')}\nAbstract: {(p.get('abstract','') or '')[:400]}\n\n"
+        prompt = f"""You are an evidence-based medicine expert. Rate each paper using Oxford Levels of Evidence and GRADE.
+
+PAPERS:
+{papers_ctx}
+
+## Evidence Quality Scorecard
+
+For EACH paper produce ONE table row:
+| # | First Author Year | Study Design | Oxford LoE | GRADE Certainty | Methodological Quality (1-10) | Clinical Relevance | Key Limitation |
+|---|------------------|--------------|-----------|-----------------|-------------------------------|-------------------|----------------|
+
+Oxford LoE: 1a (SR of RCTs) > 1b (RCT) > 2a (SR cohorts) > 2b (cohort) > 3 (case-control) > 4 (case series) > 5 (expert opinion)
+GRADE: High | Moderate | Low | Very Low
+Clinical Relevance: High (changes practice) | Medium (informative) | Low (exploratory)
+
+## Overall Body of Evidence
+- Dominant evidence level: ___
+- Overall GRADE certainty: ___
+- Key gaps in evidence quality
+- Recommended action: Sufficient for clinical decisions / More RCTs needed / SR recommended"""
+
+    elif req.tool == "absolute_risk":
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:8], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')})\nAbstract: {(p.get('abstract','') or '')[:600]}\n\n"
+        prompt = f"""You are a biostatistician. Extract absolute risk data from these papers.
+
+PAPERS:
+{papers_ctx}
+
+## Absolute Risk Analysis
+
+For each paper, extract or estimate:
+| Paper | CER (Control Event Rate) | EER (Experimental Event Rate) | ARR (Absolute Risk Reduction) | RRR (Relative Risk Reduction) | NNT / NNH | 95% CI | Outcome Measured | Time Frame |
+|-------|-------------------------|------------------------------|------------------------------|------------------------------|-----------|--------|-----------------|-----------|
+
+If data not directly reported, estimate from abstract context. Mark estimated values with *.
+
+## Clinical Interpretation
+- Best NNT for primary outcome: ___
+- Clinical significance threshold: ___
+- Comparison across studies: consistent / inconsistent?
+
+## Pooled Estimate (if applicable)
+- Weighted average ARR: ___
+- Overall NNT: ___
+- Heterogeneity concern: yes / no
+
+## Patient Counseling Translation
+"For every ___ patients treated, ___ benefit / ___ are harmed" """
+
+    elif req.tool == "subgroup_analysis":
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:8], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')})\nAbstract: {(p.get('abstract','') or '')[:500]}\n\n"
+        topic = req.query or ""
+        prompt = f"""You are a clinical epidemiologist specializing in heterogeneity of treatment effects.
+
+Analyze subgroup effects for: {topic}
+
+PAPERS:
+{papers_ctx}
+
+## Subgroup Analysis Report
+
+### 1. Reported Subgroups
+For each paper, list every subgroup reported (or "none reported"):
+| Paper | Subgroups Analyzed | Direction of Effect | P-interaction | Conclusion |
+|-------|--------------------|--------------------|--------------| -----------|
+
+### 2. Effect Modifiers Identified
+For each significant subgroup finding:
+- **Subgroup:** (e.g., age >65, female sex, CKD stage 3+)
+- **Effect in subgroup:** (effect size + CI)
+- **Effect in main population:** (for comparison)
+- **P for interaction:** (if reported)
+- **Credibility:** Is this a pre-specified subgroup? (credible / exploratory / data-dredging risk)
+
+### 3. High-Priority Subgroups to Check
+Based on pathophysiology, which subgroups should be prioritized:
+- Sex-based differences
+- Age (pediatric / elderly)
+- Ethnic/genetic differences
+- Comorbidities (renal/hepatic impairment, diabetes, etc.)
+- Disease severity
+
+### 4. Clinical Guidance
+Does the evidence justify differential treatment by any subgroup? Specify which."""
+
+    elif req.tool == "systematic_comparison":
+        papers = req.papers or []
+        papers_ctx = ""
+        for i, p in enumerate(papers[:6], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')})\nAbstract: {(p.get('abstract','') or '')[:500]}\n\n"
+        n_papers = len(papers[:6])
+        prompt = f"""You are a systematic reviewer. Create a structured side-by-side comparison of {n_papers} studies.
+
+STUDIES TO COMPARE:
+{papers_ctx}
+
+## Structured Comparison Table
+
+| Domain | {" | ".join([f"Study [{i+1}]" for i in range(n_papers)])} |
+|--------|{"-------|"*n_papers}
+| **Population** | | |
+| **Intervention** | | |
+| **Comparator** | | |
+| **Primary outcome** | | |
+| **Effect size (95% CI)** | | |
+| **p-value** | | |
+| **Sample size** | | |
+| **Follow-up** | | |
+| **Setting** | | |
+| **Risk of bias** | | |
+| **Study design** | | |
+| **Key limitation** | | |
+| **Overall quality** | | |
+
+Fill in ALL cells based on abstract data. Use "NR" (not reported) where unavailable.
+
+## Key Differences Between Studies
+1. Population differences that may explain result variation
+2. Methodological differences (dose, duration, outcome definition)
+3. Which study is most applicable to real-world practice and why
+
+## Synthesis
+Consistent direction? What does the totality suggest?"""
+
+    elif req.tool == "replication_check":
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:8], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')}) | {p.get('journal','')}\nAbstract: {(p.get('abstract','') or '')[:400]}\n\n"
+        topic = req.query or ""
+        prompt = f"""You are a scientific integrity and reproducibility expert.
+
+Assess replication and reproducibility for: {topic}
+
+PAPERS:
+{papers_ctx}
+
+## Replication Assessment
+
+### 1. Replication Status per Study
+| Paper | Finding Independently Replicated? | Number of Replication Attempts | Consistency |
+|-------|----------------------------------|-------------------------------|-------------|
+
+### 2. Reproducibility Indicators
+For each paper (check if any signals present in abstract):
+| Paper | Pre-registration Mentioned | Sample Size Powered | Multiple Comparison Concern | Result Too Perfect | Reproducibility Score (1-10) |
+|-------|--------------------------|--------------------|-----------------------------|---------------------|------------------------------|
+
+### 3. Statistical Red Flags
+- p-values just below 0.05 across multiple papers (p-hacking risk)
+- Effect sizes larger than typical for the field
+- Overfitting in prediction models
+- Surrogate endpoints without clinical validation
+
+### 4. Open Science Practices (from abstracts)
+- Any mention of pre-registration: yes/no/unclear
+- Data sharing statements: yes/no/unclear
+- Code availability: yes/no/unclear
+
+### 5. Overall Replication Confidence
+**Score:** HIGH / MODERATE / LOW / VERY LOW
+**Key concern:** ___
+**Recommended verification:** ___"""
+
+    elif req.tool == "open_science":
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:8], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')}) | {p.get('journal','')}\nAbstract: {(p.get('abstract','') or '')[:400]}\n\n"
+        prompt = f"""You are an open science advocate. Evaluate transparency and reproducibility practices.
+
+PAPERS:
+{papers_ctx}
+
+## Open Science Scorecard
+
+### 1. Transparency Table
+| Paper | Trial/Study Registered? | Open Data? | Open Code? | Pre-print Available? | COI Declared? | Funder Disclosed? | Open Access? |
+|-------|-----------------------|-----------|-----------|---------------------|--------------|------------------|-------------|
+
+Rate each: YES | NO | UNCLEAR | NR (not reported)
+
+### 2. Journal-Level Practices
+- Do these journals require data sharing? (Yes/No/Some)
+- TOP (Transparency and Openness Promotion) factor considerations
+
+### 3. Best Practices Present
+List any exemplary open science practices mentioned
+
+### 4. Missing Practices
+Critical transparency gaps in this evidence base
+
+### 5. Overall Open Science Score
+| Domain | Score (0-3) |
+|--------|-------------|
+| Pre-registration | |
+| Data availability | |
+| Code availability | |
+| Reporting quality | |
+| COI transparency | |
+| **TOTAL** | **/15** |
+
+**Interpretation:** 0-5 = Poor · 6-10 = Moderate · 11-15 = Excellent"""
+
+    elif req.tool == "pretest_prob":
+        scenario = req.query or "clinical scenario"
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:6], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')})\nAbstract: {(p.get('abstract','') or '')[:500]}\n\n"
+        prompt = f"""You are a clinical epidemiologist applying Bayesian reasoning.
+
+Clinical scenario: {scenario}
+
+Diagnostic test evidence from papers:
+{papers_ctx}
+
+## Pre/Post-Test Probability Analysis
+
+### 1. Pre-Test Probability (Prevalence)
+Based on the clinical scenario (symptoms, risk factors, setting):
+- Estimated pre-test probability: ___ %
+- Rationale: (prevalence data, clinical gestalt)
+
+### 2. Diagnostic Test Accuracy (from papers)
+For each relevant test found:
+| Test | Sensitivity | Specificity | LR+ | LR- | Source |
+|------|-------------|-------------|-----|-----|--------|
+
+Formula: LR+ = Sens/(1-Spec) · LR- = (1-Sens)/Spec
+
+### 3. Post-Test Probability (Fagan Nomogram)
+| Scenario | Pre-test P | LR Used | Pre-test Odds | Post-test Odds | Post-test P |
+|---------|-----------|---------|--------------|----------------|------------|
+| Positive test | _% | LR+ | | | |
+| Negative test | _% | LR- | | | |
+
+Formula: Post-test P = (Pre-test odds × LR) / (1 + Pre-test odds × LR)
+
+### 4. Clinical Decision Thresholds
+- **Test threshold** (below which no testing needed): ___ %
+- **Treatment threshold** (above which treat without testing): ___ %
+- **Current pre-test P vs thresholds:** Action = Test / Treat empirically / Observe
+
+### 5. Recommendations
+Which test, in which patients, changes management?"""
+
+    elif req.tool == "mechanism":
+        topic = req.query or ""
+        papers_ctx = ""
+        for i, p in enumerate((req.papers or [])[:6], 1):
+            papers_ctx += f"[{i}] {p.get('title','')} ({p.get('year','')})\nAbstract: {(p.get('abstract','') or '')[:500]}\n\n"
+        prompt = f"""You are a pharmacologist and molecular biologist. Explain the mechanism of action for: {topic}
+
+Evidence from papers:
+{papers_ctx}
+
+## Mechanism of Action Report
+
+### 1. Primary Mechanism
+- Molecular target(s): receptor, enzyme, ion channel, transporter
+- Binding characteristics: affinity, selectivity, reversibility
+- Downstream signaling pathway(s)
+
+### 2. Secondary Mechanisms
+Any pleiotropic effects, off-target effects, or downstream consequences
+
+### 3. Pharmacokinetics (ADME)
+| Parameter | Value | Clinical Relevance |
+|-----------|-------|-------------------|
+| Absorption | | |
+| Distribution (Vd) | | |
+| Metabolism (CYP) | | |
+| Elimination (t½) | | |
+| Renal adjustment | | |
+| Hepatic adjustment | | |
+
+### 4. Pharmacodynamic Effects
+- Onset of action
+- Duration of effect
+- Dose-response relationship (linear / bell-shaped / ceiling)
+- Tolerance / tachyphylaxis
+
+### 5. Clinically Important Drug Interactions
+| Interacting Drug | Mechanism | Effect | Management |
+|-----------------|-----------|--------|-----------|
+
+### 6. Special Populations
+Pediatrics, elderly, pregnancy (category), lactation
+
+### 7. Emerging Evidence
+Novel mechanisms or targets identified in the included papers"""
 
     elif req.tool == "coi_detector":
         papers_ctx = ""
