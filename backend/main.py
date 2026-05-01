@@ -127,11 +127,16 @@ class SearchRequest(BaseModel):
 async def health():
     return {
         "status": "ok",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "ai": {
             "gemini": bool(GEMINI_API_KEY),
             "groq":   bool(GROQ_API_KEY),
-        }
+        },
+        "cache": {
+            "search_entries": len(_search_cache),
+            "tool_entries":   len(_tool_cache),
+        },
+        "sources": ["pubmed", "s2", "openalex", "europepmc", "cochrane", "who"],
     }
 
 
@@ -254,6 +259,26 @@ def ai_provider_error_response(provider: str, exc: Exception):
             "provider": provider,
         },
     )
+
+
+# ── In-memory caches ─────────────────────────────────────────────────────────
+_search_cache: dict = {}   # query_key → {data, ts}
+_tool_cache:   dict = {}   # tool_key  → {data, ts}
+_CACHE_TTL_SEARCH = 300    # 5 min
+_CACHE_TTL_TOOL   = 900    # 15 min
+
+def _cache_get(cache: dict, key: str, ttl: int):
+    entry = cache.get(key)
+    if entry and (time.time() - entry["ts"]) < ttl:
+        return entry["data"]
+    return None
+
+def _cache_set(cache: dict, key: str, data):
+    cache[key] = {"data": data, "ts": time.time()}
+    if len(cache) > 200:
+        oldest = sorted(cache.keys(), key=lambda k: cache[k]["ts"])[:50]
+        for k in oldest:
+            del cache[k]
 
 
 # ── AI Chat ───────────────────────────────────────────────────────────────────
@@ -389,6 +414,87 @@ async def call_groq(messages: list, key: str) -> str:
 
 
 # ── Research tools (REST endpoints) ──────────────────────────────────────────
+_SOURCE_ALIASES = {
+    "semantic_scholar": "s2",
+    "semantic-scholar": "s2",
+    "semanticscholar": "s2",
+    "who_iris": "who",
+    "who-iris": "who",
+    "iris": "who",
+}
+_DEFAULT_SOURCES = {"pubmed", "s2", "openalex"}
+_EV_RANK = {
+    "Guideline": 0,
+    "Meta-Analysis": 1,
+    "Systematic Review": 2,
+    "SR/MA": 2,
+    "RCT": 3,
+    "Cohort": 4,
+    "Observational": 5,
+    "Case Report": 6,
+    "Preprint": 7,
+    "": 8,
+}
+_STOPWORDS = {
+    "and", "or", "the", "for", "with", "without", "versus", "vs", "from", "into",
+    "study", "trial", "review", "meta", "analysis", "effect", "effects", "therapy",
+    "treatment", "patient", "patients", "disease", "clinical", "evidence",
+}
+
+
+def _normalize_sources(sources: Optional[str]) -> set:
+    if not sources:
+        return set(_DEFAULT_SOURCES)
+    out = set()
+    for raw in sources.split(","):
+        s = raw.strip().lower()
+        if not s:
+            continue
+        out.add(_SOURCE_ALIASES.get(s, s))
+    return out
+
+
+def _query_terms(q: str) -> list:
+    return [
+        t for t in re.findall(r"[a-z0-9]+", (q or "").lower())
+        if len(t) > 2 and t not in _STOPWORDS
+    ][:10]
+
+
+def _relevance_score(p: dict, terms: list, phrase: str) -> int:
+    title = (p.get("title") or "").lower()
+    abstract = (p.get("abstract") or "").lower()
+    score = 0
+    if phrase and len(phrase) > 3:
+        if phrase in title:
+            score += 10
+        elif phrase in abstract:
+            score += 3
+    for term in terms:
+        if term in title:
+            score += 4
+        if term in abstract:
+            score += 1
+    return score
+
+
+def _rank_by_evidence(papers: list, query: str = "") -> list:
+    """Sort papers by query relevance, evidence quality, recency, then citations."""
+    terms = _query_terms(query)
+    phrase = (query or "").strip().lower()
+    def _score(p):
+        type_rank = _EV_RANK.get(p.get("study_type") or "", 3)
+        relevance = _relevance_score(p, terms, phrase)
+        try:
+            year = int(str(p.get("year") or "0")[:4] or 0)
+        except Exception:
+            year = 0
+        cites = min(int(p.get("citations") or 0), 9999)
+        relevance_bucket = 0 if relevance > 0 else 1
+        return (relevance_bucket, type_rank, -relevance, -year, -cites)
+    return sorted(papers, key=_score)
+
+
 @app.get("/api/search")
 async def search_all(
     q: str,
@@ -399,15 +505,28 @@ async def search_all(
     open_access: bool = False,
     reviews_only: bool = False,
     study_type: Optional[str] = None,
+    humans: bool = False,
+    pico: bool = False,
     sources: Optional[str] = None,
 ):
-    """Parallel search across selected sources with dedup and study-type classification."""
-    requested = set((sources or "pubmed,s2,openalex").split(","))
-    pubmed_q = q + (" AND (Review[pt] OR Meta-Analysis[pt])" if reviews_only else "")
+    """Parallel search across selected sources with dedup, quality ranking, and caching."""
+    cache_key = f"{q}|{sources}|{n}|{offset}|{year_from}|{year_to}|{open_access}|{reviews_only}|{study_type}|{humans}|{pico}"
+    cached = _cache_get(_search_cache, cache_key, _CACHE_TTL_SEARCH)
+    if cached:
+        return cached
+
+    requested = _normalize_sources(sources)
+    pubmed_q = q
+    if pico:
+        pubmed_q += " AND (clinical trial[pt] OR randomized controlled trial[pt] OR cohort studies[mh] OR systematic review[sb])"
+    if reviews_only:
+        pubmed_q += " AND (Review[pt] OR Meta-Analysis[pt] OR systematic review[sb])"
+    if humans:
+        pubmed_q += " AND Humans[Mesh]"
 
     coros = []
     if "pubmed" in requested:
-        coros.append(_pubmed_search(pubmed_q, n, year_from, open_access))
+        coros.append(_pubmed_search(pubmed_q, n, year_from, open_access, humans))
     if "s2" in requested:
         coros.append(_s2_search(q, n, year_from, open_access))
     if "openalex" in requested:
@@ -421,7 +540,7 @@ async def search_all(
 
     if not coros:
         coros = [
-            _pubmed_search(pubmed_q, n, year_from, open_access),
+            _pubmed_search(pubmed_q, n, year_from, open_access, humans),
             _s2_search(q, n, year_from, open_access),
             _openalex_search(q, n, year_from, open_access, None),
         ]
@@ -441,11 +560,35 @@ async def search_all(
     deduped = _dedupe(combined)
 
     if study_type and study_type.lower() not in ("all", ""):
-        deduped = [p for p in deduped
-                   if (p.get("study_type") or "").lower() == study_type.lower()]
+        wanted = study_type.lower()
+        if wanted in ("sr/ma", "systematic review"):
+            allowed = {"sr/ma", "systematic review", "meta-analysis"}
+        elif wanted in ("meta-analysis", "meta analysis"):
+            allowed = {"meta-analysis", "sr/ma"}
+        elif wanted in ("observational", "cohort"):
+            allowed = {"observational", "cohort"}
+        else:
+            allowed = {wanted}
+        deduped = [p for p in deduped if (p.get("study_type") or "").lower() in allowed]
 
-    return {"results": deduped, "total": len(deduped), "query": q,
-            "sources_used": list(requested)}
+    ranked = _rank_by_evidence(deduped, q)
+
+    # Evidence quality summary for frontend warnings
+    types = [p.get("study_type") or "" for p in ranked]
+    evidence_summary = {
+        "has_sr": any(t == "SR/MA" for t in types),
+        "has_meta_analysis": any(t == "Meta-Analysis" for t in types),
+        "has_systematic_review": any(t in ("Systematic Review", "SR/MA") for t in types),
+        "has_rct": any(t == "RCT" for t in types),
+        "has_guideline": any(t == "Guideline" for t in types),
+        "all_observational": bool(ranked) and all(t in ("Cohort", "Observational", "Case Report", "") for t in types),
+        "total": len(ranked),
+    }
+
+    response = {"results": ranked, "total": len(ranked), "query": q,
+                "sources_used": list(requested), "evidence_summary": evidence_summary}
+    _cache_set(_search_cache, cache_key, response)
+    return response
 
 
 @app.get("/api/pubmed")
@@ -644,10 +787,12 @@ async def get_quota(token: Optional[str] = None):
 
 
 # ── Internal search helpers ───────────────────────────────────────────────────
-async def _pubmed_search(q, n=5, year_from=None, free_only=False):
+async def _pubmed_search(q, n=5, year_from=None, free_only=False, humans=False):
     query = q
     if year_from: query += f" AND {year_from}:3000[dp]"
     if free_only: query += " AND free full text[sb]"
+    if humans and "Humans[Mesh]" not in query:
+        query += " AND Humans[Mesh]"
     base = {"tool":"clinsearch","email":PUBMED_EMAIL}
     if PUBMED_API_KEY: base["api_key"] = PUBMED_API_KEY
     try:
@@ -741,42 +886,59 @@ async def _openalex_search(q, n=5, year_from=None, oa_only=False, study_type=Non
 def _classify_study_type(title: str, abstract: str) -> str:
     """Quick regex-based study type classifier for cards."""
     text = (f"{title} {abstract}").lower()
-    if re.search(r'systematic.{0,10}review|meta.?analysis|cochrane.{0,10}review', text):
-        return "SR/MA"
+    if re.search(r'guideline|recommendation|consensus statement|practice parameter|who guideline|clinical practice guideline', text):
+        return "Guideline"
+    if re.search(r'meta.?analysis|network meta.?analysis', text):
+        return "Meta-Analysis"
+    if re.search(r'systematic.{0,10}review|cochrane.{0,10}review', text):
+        return "Systematic Review"
     if re.search(r'randomized controlled trial|randomised controlled trial|\brct\b|randomized.{0,20}trial|randomised.{0,20}trial', text):
         return "RCT"
     if re.search(r'phase (i|ii|iii|iv)\b|double.blind|placebo.controlled', text):
         return "RCT"
+    if re.search(r'\bcohort\b|prospective cohort|retrospective cohort', text):
+        return "Cohort"
     if re.search(r'\bcohort\b|case.?control|observational|cross.?sectional', text):
         return "Observational"
     if re.search(r'case report|case series|case presentation', text):
         return "Case Report"
-    if re.search(r'guideline|recommendation|consensus statement|practice parameter', text):
-        return "Guideline"
     return ""
 
 
 def _dedupe(papers: list) -> list:
-    """Deduplicate papers by DOI, PMID, or title prefix (keep highest-cited)."""
-    sorted_p = sorted(papers, key=lambda x: int(x.get("citations") or 0), reverse=True)
-    seen_doi, seen_pmid, seen_title = set(), set(), set()
+    """Deduplicate papers by DOI, PMID, normalized title, or title+year."""
+    sorted_p = sorted(
+        papers,
+        key=lambda x: (
+            int(x.get("citations") or 0),
+            1 if x.get("abstract") else 0,
+            1 if x.get("doi") else 0,
+        ),
+        reverse=True,
+    )
+    seen_doi, seen_pmid, seen_title, seen_title_year = set(), set(), set(), set()
     out = []
     for p in sorted_p:
-        doi = (p.get("doi") or "").lower().strip()
+        doi = (p.get("doi") or "").lower().strip().replace("https://doi.org/", "")
         pmid = str(p.get("pmid") or "").strip()
-        title_key = re.sub(r"\W+", "", (p.get("title") or "").lower())[:40]
+        title_norm = re.sub(r"\W+", "", (p.get("title") or "").lower())
+        title_key = title_norm[:80]
+        title_year_key = f"{title_key}:{str(p.get('year') or '')[:4]}"
         if doi and doi in seen_doi:
             continue
         if pmid and pmid in seen_pmid:
             continue
-        if title_key and len(title_key) > 10 and title_key in seen_title:
+        if title_key and len(title_key) > 20 and title_key in seen_title:
+            continue
+        if title_year_key and len(title_key) > 20 and title_year_key in seen_title_year:
             continue
         if doi:
             seen_doi.add(doi)
         if pmid:
             seen_pmid.add(pmid)
-        if title_key and len(title_key) > 10:
+        if title_key and len(title_key) > 20:
             seen_title.add(title_key)
+            seen_title_year.add(title_year_key)
         out.append(p)
     return out
 
@@ -1756,11 +1918,97 @@ class AIToolRequest(BaseModel):
     session_token: Optional[str] = None
 
 
+def _build_papers_ctx(papers, max_papers=10, abstract_chars=500) -> str:
+    """Standard paper context block for all AI tools."""
+    if not papers:
+        return ""
+    ctx = ""
+    for i, p in enumerate(papers[:max_papers], 1):
+        authors = ", ".join((p.get("authors") or [])[:3])
+        pmid_val = p.get("pmid") or ""
+        doi_val  = p.get("doi") or ""
+        url_val  = p.get("url") or (("https://pubmed.ncbi.nlm.nih.gov/" + pmid_val + "/") if pmid_val else "")
+        id_str   = ("PMID:" + pmid_val) if pmid_val else (("DOI:" + doi_val) if doi_val else "")
+        abstract = (p.get("abstract") or "")[:abstract_chars]
+        ctx += (
+            f"\n[{i}] \"{p.get('title','')}\" — {id_str}\n"
+            f"    {authors} ({p.get('year','')}) {p.get('journal','')}\n"
+            f"    Study type: {p.get('study_type','unknown')} | Citations: {p.get('citations','?')}\n"
+            f"    Abstract: {abstract}\n"
+            f"    URL: {url_val}\n"
+        )
+    return ctx
+
+
+_CITE_INSTRUCTION = (
+    "\n\nCITATION RULES: "
+    "Every factual claim MUST be cited as [[N] Author, Year](URL). "
+    "Never invent papers not listed above. "
+    "If evidence is insufficient (< 2 papers with relevant data), "
+    "state explicitly: '⚠️ Insufficient evidence: only N papers found. Interpret with caution.' "
+    "Distinguish clearly between: 'Extracted from paper [N]: ...' vs 'AI interpretation: ...'."
+)
+
+
+def _append_ai_evidence_guardrails(prompt: str, req: AIToolRequest) -> str:
+    """Require paper-grounded answers for tools that synthesize retrieved papers."""
+    if req.tool in {"forest_plot", "sr_screen"} or not req.papers:
+        return prompt
+    papers_ctx = _build_papers_ctx(req.papers, max_papers=10, abstract_chars=450)
+    return (
+        f"{prompt}\n\n"
+        "MANDATORY EVIDENCE GUARDRAILS:\n"
+        f"{papers_ctx}\n"
+        f"{_CITE_INSTRUCTION}\n"
+        "Use only the real papers listed above for evidence claims. "
+        "Include PMID/DOI/link beside conclusions when available. "
+        "If the listed papers do not support a conclusion, say evidence is insufficient."
+    )
+
+
 @app.post("/api/ai-tool")
 async def ai_tool(req: AIToolRequest):
-    """Run a specialised AI tool: journal club, gap analysis, head-to-head, patient summary."""
+    """Run a specialised AI tool with caching."""
+    # Cache key from tool + paper IDs + query
+    paper_ids = sorted([(p.get("doi") or p.get("pmid") or p.get("id") or "") for p in (req.papers or [])])
+    tool_cache_key = f"{req.tool}|{req.query or ''}|{'|'.join(paper_ids[:8])}"
+    cached = _cache_get(_tool_cache, tool_cache_key, _CACHE_TTL_TOOL)
+    if cached:
+        return cached
 
-    if req.tool == "journal_club":
+    if req.tool == "clinical_bottom_line":
+        papers_ctx = _build_papers_ctx(req.papers, abstract_chars=600)
+        types = [(p.get("study_type") or "") for p in (req.papers or [])]
+        has_sr = any(t == "SR/MA" for t in types)
+        has_rct = any(t == "RCT" for t in types)
+        ev_warn = ""
+        if not req.papers or len(req.papers) < 2:
+            ev_warn = "\n⚠️ WARNING: Fewer than 2 papers provided. Evidence base is very limited."
+        elif all(t in ("Observational", "Case Report", "") for t in types):
+            ev_warn = "\n⚠️ WARNING: Only observational studies found. No RCTs or systematic reviews. High risk of confounding."
+        prompt = (
+            "You are a senior attending physician answering: WHAT SHOULD I DO FOR MY PATIENT?\n"
+            f"Clinical question: {req.query or 'based on provided papers'}"
+            f"{ev_warn}\n\nEvidence base (cite every claim as [[N] Author, Year](URL)):{papers_ctx}"
+            f"{_CITE_INSTRUCTION}\n\n"
+            "## ⚡ Clinical Bottom Line\n"
+            "One paragraph. What to do, for whom, with what effect. Plain clinical language.\n\n"
+            "## 📊 Best Available Evidence\n"
+            "| Paper [N] (Author, Year) | Study Type | N | Key Result | Certainty |\n"
+            "|--------------------------|-----------|---|------------|----------|\n"
+            "(fill table from cited papers only)\n\n"
+            "## 📉 Absolute Risk & NNT\n"
+            "ARR, NNT/NNH with 95% CI from the best trial. If unavailable, state so.\n\n"
+            "## 🎯 For Which Patients?\n"
+            "Who benefits most / is excluded from current evidence?\n\n"
+            "## ⚠️ Evidence Certainty\n"
+            "GRADE: ⊕⊕⊕⊕ High / ⊕⊕⊕◯ Moderate / ⊕⊕◯◯ Low / ⊕◯◯◯ Very Low\n"
+            "Justify based on study designs found.\n\n"
+            "## 🔴 Practice Change?\n"
+            "Yes/No/Maybe — and why, based only on cited evidence."
+        )
+
+    elif req.tool == "journal_club":
         paper_text = ""
         if req.pmid or req.doi:
             try:
@@ -3211,19 +3459,24 @@ What additional COI information is needed and where to find it."""
     else:
         raise HTTPException(400, "Unknown tool")
 
+    prompt = _append_ai_evidence_guardrails(prompt, req)
     messages = [{"role": "user", "content": prompt}]
     raw = None
+    gemini_exc = None
     try:
         if GEMINI_API_KEY:
             try:
                 raw = await call_gemini(messages, GEMINI_API_KEY)
-            except Exception:
+            except Exception as e:
+                gemini_exc = e
                 raw = None
         if not raw and GROQ_API_KEY:
             try:
                 raw = await call_groq(messages, GROQ_API_KEY)
             except Exception as e:
                 return ai_provider_error_response("groq", e)
+        if not raw and gemini_exc:
+            return ai_provider_error_response("gemini", gemini_exc)
         if not raw:
             raise HTTPException(503, "No AI provider available")
 
@@ -3239,11 +3492,15 @@ What additional COI information is needed and where to find it."""
             try:
                 match = re.search(r'\[[\s\S]+\]', raw)
                 decisions = json.loads(match.group()) if match else []
-                return {"tool": req.tool, "decisions": decisions, "raw": raw}
+                result = {"tool": req.tool, "decisions": decisions, "raw": raw}
+                _cache_set(_tool_cache, tool_cache_key, result)
+                return result
             except Exception:
                 return {"tool": req.tool, "decisions": [], "raw": raw}
 
-        return {"tool": req.tool, "result": raw}
+        result = {"tool": req.tool, "result": raw}
+        _cache_set(_tool_cache, tool_cache_key, result)
+        return result
     except HTTPException:
         raise
     except Exception as e:

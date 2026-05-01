@@ -202,6 +202,13 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .rbtn-a:hover{background:rgba(0,212,170,.07)}
 .rbtn-save{color:var(--green);border-color:rgba(62,207,142,.22)}
 .rbtn-save:hover{background:rgba(62,207,142,.07)}
+.r-more{position:relative;display:inline-flex}
+.r-menu{position:absolute;right:0;top:calc(100% + 4px);display:none;min-width:172px;background:var(--s2);border:1px solid var(--b2);border-radius:7px;padding:.28rem;z-index:40;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.r-menu.open{display:flex;flex-direction:column;gap:.18rem}
+.r-menu .rbtn{width:100%;justify-content:flex-start;border-color:transparent;padding:.3rem .45rem}
+.r-menu .rbtn:hover{background:var(--s3);border-color:var(--b2)}
+.e-warn{font-size:.67rem;color:var(--gold);background:rgba(232,184,75,.08);border:1px solid rgba(232,184,75,.18);border-radius:5px;padding:.28rem .45rem;margin:.34rem 0 0;line-height:1.35}
+.e-warn.red{color:var(--red);background:rgba(240,92,92,.08);border-color:rgba(240,92,92,.2)}
 .cites{margin-left:auto;font-family:var(--mono);font-size:.63rem;color:var(--dim)}
 
 /* PICO visual */
@@ -866,28 +873,31 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
         <!-- Advanced filter panel -->
         <div class="filter-panel" id="filterPanel">
-          <div class="filter-row">
-            <span class="filter-label">Year</span>
-            <div class="filter-range">
+	          <div class="filter-row">
+	            <span class="filter-label">Year</span>
+	            <div class="filter-range">
               <span id="yearFromVal">1990</span>
-              <input type="range" id="yearFrom" min="1950" max="2025" value="1990" oninput="document.getElementById('yearFromVal').textContent=this.value">
+              <input type="range" id="yearFrom" min="1950" max="2026" value="1990" oninput="document.getElementById('yearFromVal').textContent=this.value">
               <span>–</span>
-              <input type="range" id="yearTo" min="1950" max="2025" value="2025" oninput="document.getElementById('yearToVal').textContent=this.value">
-              <span id="yearToVal">2025</span>
-            </div>
-          </div>
-          <div class="filter-row">
-            <span class="filter-label">Study type</span>
-            <span class="filter-chip on" data-f="all">All</span>
-            <span class="filter-chip" data-f="RCT">🟢 RCT</span>
-            <span class="filter-chip" data-f="SR/MA">🔵 SR/MA</span>
-            <span class="filter-chip" data-f="Observational">🟡 Observational</span>
-            <span class="filter-chip" data-f="Guideline">📋 Guideline</span>
-          </div>
-          <div class="filter-row">
-            <span class="filter-label">Access</span>
-            <span class="filter-chip" id="oaOnlyChip" onclick="this.classList.toggle('on')">🔓 Open Access only</span>
-          </div>
+              <input type="range" id="yearTo" min="1950" max="2026" value="2026" oninput="document.getElementById('yearToVal').textContent=this.value">
+	              <span id="yearToVal">2026</span>
+	            </div>
+	            <span class="filter-chip" id="last5Chip" onclick="setLastFiveYears()">Last 5 years</span>
+	          </div>
+	          <div class="filter-row">
+	            <span class="filter-label">Study type</span>
+	            <span class="filter-chip on" data-f="all">All</span>
+	            <span class="filter-chip" data-f="RCT">🟢 RCT</span>
+	            <span class="filter-chip" data-f="Meta-Analysis">🔵 Meta-analysis</span>
+	            <span class="filter-chip" data-f="Systematic Review">🔵 Systematic review</span>
+	            <span class="filter-chip" data-f="Cohort">🟡 Cohort</span>
+	            <span class="filter-chip" data-f="Guideline">📋 Guideline</span>
+	          </div>
+	          <div class="filter-row">
+	            <span class="filter-label">Access</span>
+	            <span class="filter-chip" id="oaOnlyChip" onclick="this.classList.toggle('on')">🔓 Open Access only</span>
+	            <span class="filter-chip" id="humansOnlyChip" onclick="this.classList.toggle('on')">Human studies</span>
+	          </div>
         </div>
       </div>
     </div>
@@ -1210,9 +1220,23 @@ function getActiveFilters() {
   const studyChip = document.querySelector('.filter-chip.on[data-f]');
   const studyType = (studyChip?.dataset.f === 'all' || !studyChip) ? '' : (studyChip?.dataset.f || '');
   const oaOnly = document.getElementById('oaOnlyChip')?.classList.contains('on') || false;
+  const humansOnly = document.getElementById('humansOnlyChip')?.classList.contains('on') || false;
+  const pico = chips.includes('pico');
   const yearFrom = parseInt(document.getElementById('yearFrom')?.value || 0) || null;
   const yearTo = parseInt(document.getElementById('yearTo')?.value || 0) || null;
-  return {srcs: srcs.length ? srcs : ['pubmed','s2','openalex'], studyType, oaOnly, yearFrom, yearTo};
+  return {srcs: srcs.length ? srcs : ['pubmed','s2','openalex'], studyType, oaOnly, humansOnly, pico, yearFrom, yearTo};
+}
+
+function setLastFiveYears() {
+  const currentYear = new Date().getFullYear();
+  const from = currentYear - 5;
+  const yFrom = document.getElementById('yearFrom');
+  const yTo = document.getElementById('yearTo');
+  if(yFrom) yFrom.value = from;
+  if(yTo) yTo.value = currentYear;
+  document.getElementById('yearFromVal').textContent = from;
+  document.getElementById('yearToVal').textContent = currentYear;
+  document.getElementById('last5Chip')?.classList.add('on');
 }
 
 function buildCardHtml(p) {
@@ -1226,12 +1250,22 @@ function buildCardHtml(p) {
   const src = p.source||'';
   const pmid = p.pmid||p.id||'';
   const doi = p.doi||'';
-  const url = p.url||(pmid ? 'https://pubmed.ncbi.nlm.nih.gov/'+pmid+'/' : '#');
+  const url = p.url || (pmid && /^\d+$/.test(String(pmid)) ? 'https://pubmed.ncbi.nlm.nih.gov/'+pmid+'/' : (doi ? 'https://doi.org/'+doi : '#'));
   const studyType = p.study_type || (p.title?.match(/meta.?anal/i)?'SR/MA':p.title?.match(/\bsystematic\b/i)?'SR/MA':p.title?.match(/\bRCT\b|\brandomiz/i)?'RCT':'');
-  const stClass = studyType==='RCT'?'ev-rct':studyType==='SR/MA'?'ev-sr':studyType==='Observational'?'ev-observational':studyType==='Case Report'?'ev-casereport':studyType==='Guideline'?'ev-guideline':'';
+  const stClass = studyType==='RCT'?'ev-rct':(['SR/MA','Meta-Analysis','Systematic Review'].includes(studyType)?'ev-sr':(['Observational','Cohort'].includes(studyType)?'ev-observational':studyType==='Case Report'?'ev-casereport':studyType==='Guideline'?'ev-guideline':''));
   const isOA = p.open_access||p.isOpenAccess||p.oa_url||false;
   const cardId = 'card'+Math.random().toString(36).slice(2);
   const paperKey = cachePaper(p);
+  const isPreprint = /medrxiv|biorxiv|preprint/i.test(`${src} ${p.server||''} ${url}`);
+  const isRetracted = /retracted|retraction notice|withdrawn/i.test(`${p.title||''} ${abs}`);
+  const weakType = ['Observational','Cohort','Case Report','Preprint',''].includes(studyType);
+  const warn = isRetracted
+    ? '<div class="e-warn red">Retracted or withdrawn signal detected. Do not use this as practice-changing evidence without verification.</div>'
+    : isPreprint
+    ? '<div class="e-warn red">Preprint: not peer reviewed. Treat conclusions as provisional.</div>'
+    : weakType
+      ? `<div class="e-warn">Lower-certainty evidence${studyType?`: ${studyType}`:''}. Check confounding, bias, and applicability before changing practice.</div>`
+      : '';
   return {cardId, html: `<div class="r-card" id="${cardId}">
     <div class="r-top">
       <div class="r-title"><a href="${url}" target="_blank" rel="noopener">${esc(p.title||'')}</a></div>
@@ -1246,26 +1280,32 @@ function buildCardHtml(p) {
       ${p.year?`<span class="r-sep">·</span><span>${p.year}</span>`:''}
       ${p.journal?`<span class="r-sep">·</span><em id="${cardId}jrnl">${esc(p.journal)}</em>`:''}
       ${p.citations?`<span class="cites">⭐ ${p.citations}</span>`:''}
-    </div>
-    ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
-    <div class="r-acts">
-      <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
-      ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
-      <button class="rbtn rbtn-save" onclick="savePaperByKey('${paperKey}',this)">💾 Save</button>
-      ${(pmid||doi)?`<button class="rbtn" onclick="readFulltextByKey('${paperKey}',this)">📖 Read</button>`:''}
-      <button class="rbtn" onclick="showJournalClubByKey('${paperKey}')">📋 Journal Club</button>
-      <button class="rbtn" onclick="showPatientSummaryByKey('${paperKey}')">👤 Patient</button>
-      <button class="rbtn" onclick="showPICOByKey('${paperKey}')">🔬 PICO</button>
-      <button class="rbtn" onclick="showDrugInteractionByKey('${paperKey}')">💊 Interactions</button>
-      <button class="rbtn" onclick="showTranslationByKey('${paperKey}')">🌐 Translate</button>
-      <button class="rbtn" onclick="showRoBByKey('${paperKey}')">⚖️ RoB</button>
-      <button class="rbtn" onclick="showQUADAS2ByKey('${paperKey}')">🔬 QUADAS</button>
-      <button class="rbtn" onclick="showStatsCriticByKey('${paperKey}')">📐 Stats</button>
-      <button class="rbtn" onclick="showCMEQuestionsByKey('${paperKey}')">📚 CME</button>
-      ${(pmid||doi)?`<button class="rbtn" onclick="showCitationGraphByKey('${paperKey}')">🕸 Citations</button>`:''}
-      ${(p.url||doi)?`<button class="rbtn" onclick="analyzePDFByKey('${paperKey}')">📄 AI Read</button>`:''}
-    </div>
-  </div>`};
+	    </div>
+	    ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
+	    ${warn}
+	    <div class="r-acts">
+	      <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
+	      ${doi?`<a class="rbtn" href="https://doi.org/${doi}" target="_blank" rel="noopener">DOI</a>`:''}
+	      <button class="rbtn rbtn-save" onclick="savePaperByKey('${paperKey}',this)">💾 Save</button>
+	      <button class="rbtn" onclick="showPICOByKey('${paperKey}')">🔬 PICO</button>
+	      <button class="rbtn" onclick="showJournalClubByKey('${paperKey}')">📋 Journal Club</button>
+	      <div class="r-more">
+	        <button class="rbtn" onclick="togglePaperMenu(event,this)">More ▾</button>
+	        <div class="r-menu">
+	          ${(pmid||doi)?`<button class="rbtn" onclick="readFulltextByKey('${paperKey}',this)">📖 Read fulltext</button>`:''}
+	          <button class="rbtn" onclick="showPatientSummaryByKey('${paperKey}')">👤 Patient summary</button>
+	          <button class="rbtn" onclick="showDrugInteractionByKey('${paperKey}')">💊 Interactions</button>
+	          <button class="rbtn" onclick="showTranslationByKey('${paperKey}')">🌐 Translate</button>
+	          <button class="rbtn" onclick="showRoBByKey('${paperKey}')">⚖️ Risk of bias</button>
+	          <button class="rbtn" onclick="showQUADAS2ByKey('${paperKey}')">🔬 QUADAS</button>
+	          <button class="rbtn" onclick="showStatsCriticByKey('${paperKey}')">📐 Stats critique</button>
+	          <button class="rbtn" onclick="showCMEQuestionsByKey('${paperKey}')">📚 CME questions</button>
+	          ${(pmid||doi)?`<button class="rbtn" onclick="showCitationGraphByKey('${paperKey}')">🕸 Citations</button>`:''}
+	          ${(p.url||doi)?`<button class="rbtn" onclick="analyzePDFByKey('${paperKey}')">📄 AI Read</button>`:''}
+	        </div>
+	      </div>
+	    </div>
+	  </div>`};
 }
 
 function sortResults(papers, order) {
@@ -1274,11 +1314,22 @@ function sortResults(papers, order) {
   else if(order === 'date_asc') sorted.sort((a,b)=>parseInt(a.year||0)-parseInt(b.year||0));
   else if(order === 'citations_desc') sorted.sort((a,b)=>parseInt(b.citations||0)-parseInt(a.citations||0));
   else if(order === 'study_type') {
-    const rank = {'SR/MA':0,'RCT':1,'Guideline':2,'Observational':3,'Case Report':4,'':5};
-    sorted.sort((a,b)=>(rank[a.study_type||'']??5)-(rank[b.study_type||'']??5));
+    const rank = {'Guideline':0,'Meta-Analysis':1,'Systematic Review':2,'SR/MA':2,'RCT':3,'Cohort':4,'Observational':5,'Case Report':6,'Preprint':7,'':8};
+    sorted.sort((a,b)=>(rank[a.study_type||'']??8)-(rank[b.study_type||'']??8));
   }
   return sorted;
 }
+
+function togglePaperMenu(event, btn) {
+  event.stopPropagation();
+  document.querySelectorAll('.r-menu.open').forEach(m=>{
+    if(m !== btn.nextElementSibling) m.classList.remove('open');
+  });
+  btn.nextElementSibling?.classList.toggle('open');
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.r-more')) document.querySelectorAll('.r-menu.open').forEach(m=>m.classList.remove('open'));
+});
 
 async function searchMode(query, appendToExisting) {
   const filters = getActiveFilters();
@@ -1304,8 +1355,10 @@ async function searchMode(query, appendToExisting) {
     let url = `${API}/api/search?q=${encodeURIComponent(query)}&n=10&offset=${offset}`;
     url += `&sources=${encodeURIComponent(filters.srcs.join(','))}`;
     if(filters.oaOnly) url += '&open_access=true';
+    if(filters.humansOnly) url += '&humans=true';
+    if(filters.pico) url += '&pico=true';
     if(filters.yearFrom) url += `&year_from=${filters.yearFrom}`;
-    if(filters.yearTo && filters.yearTo < 2025) url += `&year_to=${filters.yearTo}`;
+    if(filters.yearTo && filters.yearTo < new Date().getFullYear()) url += `&year_to=${filters.yearTo}`;
     if(filters.studyType) url += `&study_type=${encodeURIComponent(filters.studyType)}`;
 
     const r=await fetch(url);
@@ -1357,6 +1410,7 @@ async function searchMode(query, appendToExisting) {
       // Action buttons
       const actBar=document.createElement('div');actBar.className='srch-actions';
       actBar.innerHTML=`
+        <button class="act-btn" onclick="showEvidenceSummary(window._srchPapers,window._srchQuery)">⚡ Evidence Summary</button>
         <button class="act-btn" onclick="showGapAnalysis(window._srchPapers,window._srchQuery)">🗺 Gaps</button>
         <button class="act-btn" onclick="showHeadToHead(window._srchPapers,window._srchQuery)">⚖️ Head-to-Head</button>
         <button class="act-btn" onclick="showForestPlot(window._srchPapers,window._srchQuery)">🌲 Forest Plot</button>
@@ -1428,13 +1482,37 @@ async function searchMode(query, appendToExisting) {
     synWrap.innerHTML=`<div class="msg-av av-ai">CS</div><div class="msg-body"><div class="msg-role">ClinSearch AI — Evidence Synthesis</div><div class="msg-text" id="${synId}" style="color:var(--muted);font-size:.82rem">⚡ Synthesizing ${papers.length} papers…</div></div>`;
     document.getElementById('msgs').appendChild(synWrap);scrollBot();
 
-    let ctx=`[REAL PAPERS — cite every claim as [[N] Author, Year](URL), extract effect sizes, CI, p-values]\n`;
+    let ctx=`[REAL PAPERS — cite every factual claim as [[N] Author, Year](URL). Do not cite papers outside this list. Always include PMID/DOI/link next to conclusions. Separate "Extracted data" from "AI interpretation".]\n`;
     papers.slice(0,8).forEach((p,i)=>{
-      ctx+=`\n[${i+1}] "${p.title}" — ${p.url||''}\n  ${(p.authors||[]).slice(0,3).join(', ')} (${p.year||''}) ${p.journal||''} | Citations: ${p.citations||'?'} | Study type: ${p.study_type||'?'}\n  Abstract: ${(p.abstract||'').slice(0,700)}\n`;
+      const idLine = [p.pmid?`PMID:${p.pmid}`:'', p.doi?`DOI:${p.doi}`:'', p.url||''].filter(Boolean).join(' | ');
+      ctx+=`\n[${i+1}] "${p.title}" — ${idLine}\n  ${(p.authors||[]).slice(0,3).join(', ')} (${p.year||''}) ${p.journal||''} | Citations: ${p.citations||'?'} | Study type: ${p.study_type||'?'}\n  Abstract: ${(p.abstract||'').slice(0,700)}\n`;
     });
+    const weakMsg = d.evidence_summary?.total < 2
+      ? 'Evidence is insufficient: fewer than 2 relevant papers were retrieved. Say this clearly.'
+      : d.evidence_summary?.all_observational
+        ? 'Evidence is low certainty: retrieved papers are observational/case-level only. Say this clearly.'
+        : '';
 
     const synEl=document.getElementById(synId);
-    const msgs=[{role:'system',content:buildSystemPrompt()+'\n\n'+ctx},{role:'user',content:`Synthesize the evidence on: ${query}`}];
+    const msgs=[{role:'system',content:buildSystemPrompt()+'\n\n'+ctx},{role:'user',content:`Create an Evidence Summary for: ${query}
+
+${weakMsg}
+
+Use this exact structure:
+## Clinical Bottom Line
+What should a clinician do, for whom, and based on which cited evidence.
+
+## Extracted Data From Papers
+Table: Paper [N] with PMID/DOI/link | Study type | Population | Intervention/comparator | Key numeric result | Limitations.
+
+## AI Interpretation
+Interpretation separated from extracted data. Explain applicability and uncertainty.
+
+## GRADE Certainty
+High / Moderate / Low / Very low with reasons.
+
+## Safety / Bias Warnings
+Mention preprints, retractions, observational designs, and low-certainty evidence when present.`}];
     try {
       const synResp=await callServerStream(msgs,S.session||'',chunk=>{synEl.innerHTML=mdToHtml(chunk);scrollBot();});
       synEl.innerHTML=mdToHtml(synResp);
@@ -2447,6 +2525,11 @@ async function showGapAnalysis(papers, query) {
 async function showHeadToHead(papers, query) {
   const resultEl=addToolPanel(`⚖️ Head-to-Head Comparison — "${query}"`);
   await runAITool('head_to_head',{papers,query},resultEl);
+}
+
+async function showEvidenceSummary(papers, query) {
+  const resultEl=addToolPanel(`⚡ Evidence Summary — "${query}"`);
+  await runAITool('clinical_bottom_line',{papers,query},resultEl);
 }
 
 async function showForestPlot(papers, query) {
