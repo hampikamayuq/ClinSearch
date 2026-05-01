@@ -1228,13 +1228,17 @@ If exact data is not available, estimate from the abstract. Ensure effect and CI
         raise HTTPException(400, "Unknown tool")
 
     messages = [{"role": "user", "content": prompt}]
+    raw = None
     try:
         if GEMINI_API_KEY:
-            raw = await call_gemini(messages, GEMINI_API_KEY)
-        elif GROQ_API_KEY:
+            try:
+                raw = await call_gemini(messages, GEMINI_API_KEY)
+            except Exception:
+                raw = None
+        if not raw and GROQ_API_KEY:
             raw = await call_groq(messages, GROQ_API_KEY)
-        else:
-            raise HTTPException(503, "No AI provider")
+        if not raw:
+            raise HTTPException(503, "No AI provider available")
 
         if req.tool == "forest_plot":
             try:
@@ -1245,5 +1249,7 @@ If exact data is not available, estimate from the abstract. Ensure effect and CI
                 return {"tool": req.tool, "data": {}, "raw": raw}
 
         return {"tool": req.tool, "result": raw}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(500, str(e))
