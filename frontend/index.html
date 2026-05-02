@@ -117,6 +117,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .wo-title{font-size:.8rem;font-weight:600;margin-bottom:.15rem}
 .wo-desc{font-size:.7rem;color:var(--muted);line-height:1.4}
 #welcome .calc-section,#welcome .quick-calc{display:none}
+#welcome.calc-mode .welcome,#welcome.calc-mode .home-actions,#welcome.calc-mode .wizard{display:none}
+#welcome.calc-mode .calc-section,#welcome.calc-mode .quick-calc{display:block}
+.calc-home-title{display:none;max-width:760px;margin:1.4rem auto .2rem}
+#welcome.calc-mode .calc-home-title{display:block}
 
 /* Message */
 .msg{display:flex;gap:.6rem;animation:fadeUp .2s ease}
@@ -633,12 +637,12 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
     <div class="mode-bar">
       <div class="mode-tab on" id="mt-search" onclick="setMode('search')"><span>Search Evidence</span></div>
       <div class="mode-tab" id="mt-chat" onclick="setMode('chat')"><span>Clinical Chat</span></div>
+      <div class="mode-tab" id="mt-stats" onclick="setMode('stats')"><span>Calculators</span></div>
       <div class="mode-tab" onclick="toggleWorkspace()"><span>Saved Papers</span></div>
       <div class="mode-tab" onclick="toggleTools()"><span>Tools</span></div>
       <div class="mode-tab secondary" id="mt-trials" onclick="setMode('trials')"><span>Trials</span></div>
       <div class="mode-tab secondary" id="mt-paper" onclick="setMode('paper')"><span>Paper</span></div>
       <div class="mode-tab secondary" id="mt-preprints" onclick="setMode('preprints')"><span>Preprints</span></div>
-      <div class="mode-tab secondary" id="mt-stats" onclick="setMode('stats')"><span>Stats</span></div>
       <div class="mode-tab secondary" id="mt-export" onclick="setMode('export')"><span>Export</span></div>
     </div>
 
@@ -655,6 +659,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
           <button class="home-action" onclick="setReviewDepth('fast');setMode('search');document.getElementById('inp').focus()">Fast Answer</button>
           <button class="home-action" onclick="setReviewDepth('deep');setMode('search');document.getElementById('inp').focus()">Deep Review</button>
           <button class="home-action" onclick="toggleFilterPanel()">PICO / Filters</button>
+          <button class="home-action" onclick="setMode('stats')">Calculators</button>
         </div>
         <div class="wizard">
           <div class="wiz-title">Research workflow</div>
@@ -677,6 +682,12 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
             </div>
           </div>
         </div>
+        <div class="calc-home-title">
+          <div class="wlc-eye">Clinical calculators</div>
+          <h2 style="font-family:var(--serif);font-size:1.35rem;margin-bottom:.35rem">Bedside calculators and risk tools</h2>
+          <p style="font-size:.82rem;color:var(--muted);line-height:1.6">Use these tools for quick NNT/NNH, diagnostic probability and common clinical risk scores.</p>
+        </div>
+
         <!-- NNT Quick Calculator -->
         <div class="quick-calc" style="margin:1rem 0 0;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.9rem 1rem">
           <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
@@ -1182,13 +1193,14 @@ function setMode(m) {
   S.mode=m;
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('on'));
   document.getElementById('mt-'+m)?.classList.add('on');
+  document.getElementById('welcome')?.classList.toggle('calc-mode', m === 'stats');
   const placeholders={
     chat:'Ask a clinical question…',
     search:'Ask a clinical question or enter PICO terms…',
     trials:'Condition or intervention for trials…',
     paper:'Enter PMID or DOI…',
     preprints:'Search preprints (medRxiv · bioRxiv)…',
-    stats:'Describe your 2×2 table or ask for statistics…',
+    stats:'Use the calculators above, or ask a statistics question…',
     export:'List DOIs to export (one per line)…',
   };
   document.getElementById('inp').placeholder=placeholders[m]||placeholders.chat;
