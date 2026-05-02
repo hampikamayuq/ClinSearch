@@ -6,7 +6,8 @@
   "scripts": {
     "check:js": "awk '/<script>/{flag=1;next}/<\\/script>/{flag=0}flag' frontend/index.html > /tmp/clinsearch-inline.js && node --check /tmp/clinsearch-inline.js && node -e \"const fs=require('fs'); const acorn=require('acorn'); const src=fs.readFileSync('/tmp/clinsearch-inline.js','utf8'); acorn.parse(src,{ecmaVersion:'latest'}); console.log('JS parse ok')\"",
     "check:py": "python3 -m py_compile backend/main.py && python3 tests/test_core.py",
-    "test": "npm run check:js && npm run check:py"
+    "test": "npm run check:js && npm run check:py",
+    "test:e2e": "playwright test"
   },
   "repository": {
     "type": "git",
@@ -20,6 +21,7 @@
   },
   "homepage": "https://github.com/hampikamayuq/ClinSearch#readme",
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "acorn": "^8.16.0",
     "esprima": "^4.0.1"
   }
