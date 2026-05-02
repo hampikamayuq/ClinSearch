@@ -83,6 +83,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 /* ── Mode tabs ── */
 .mode-bar{display:flex;gap:0;padding:0 1.25rem;border-bottom:1px solid var(--b1);background:var(--s2);flex-shrink:0;overflow-x:auto}
 .mode-tab{padding:.52rem .9rem;font-size:.78rem;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .12s;display:flex;align-items:center;gap:.3rem}
+.mode-tab.secondary{display:none}
 .mode-tab:hover{color:var(--text)}
 .mode-tab.on{color:var(--accent);border-bottom-color:var(--accent)}
 
@@ -98,6 +99,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .wlc-eye::before,.wlc-eye::after{content:'';width:24px;height:1px;background:var(--accent);opacity:.4}
 .welcome h2{font-family:var(--serif);font-size:1.5rem;margin-bottom:.45rem;color:var(--text);font-weight:700}
 .welcome p{font-size:.83rem;color:var(--muted);margin-bottom:1.5rem;line-height:1.7;max-width:440px;margin-left:auto;margin-right:auto}
+.home-actions{display:flex;gap:.45rem;justify-content:center;flex-wrap:wrap;margin:-.6rem auto 1rem}
+.home-action{border:1px solid var(--b2);background:var(--s1);color:var(--text);border-radius:7px;padding:.42rem .8rem;font-size:.76rem;cursor:pointer}
+.home-action.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.home-action:hover{border-color:var(--accent);color:var(--accent)}
+.home-action.primary:hover{color:#fff;opacity:.92}
 
 /* Wizard */
 .wizard{background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;max-width:600px;margin-left:auto;margin-right:auto}
@@ -110,6 +116,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .wo-icon{font-size:1.1rem;margin-bottom:.3rem}
 .wo-title{font-size:.8rem;font-weight:600;margin-bottom:.15rem}
 .wo-desc{font-size:.7rem;color:var(--muted);line-height:1.4}
+#welcome .calc-section,#welcome .quick-calc{display:none}
 
 /* Message */
 .msg{display:flex;gap:.6rem;animation:fadeUp .2s ease}
@@ -596,7 +603,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <span id="userName">Sign in</span>
     </div>
     <button style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .65rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .1s;font-family:var(--sans)" onclick="toggleTools()">Tools</button>
-    <button style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .65rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .1s;font-family:var(--sans)" id="wsBtn" onclick="toggleWorkspace()">Workspace<span id="wsCount" style="font-family:var(--mono);font-size:.62rem;color:var(--accent)"></span></button>
+    <button style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .65rem;border-radius:6px;font-size:.72rem;cursor:pointer;transition:all .1s;font-family:var(--sans)" id="wsBtn" onclick="toggleWorkspace()">Saved Papers<span id="wsCount" style="font-family:var(--mono);font-size:.62rem;color:var(--accent)"></span></button>
     <button id="themeBtn" style="background:none;border:1px solid var(--b1);color:var(--muted);padding:.26rem .55rem;border-radius:6px;font-size:.82rem;cursor:pointer;transition:all .1s" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
   </div>
 </header>
@@ -614,7 +621,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
     <div class="hist" id="h3">Melanoma immunotherapy</div>
     <div class="lsb-bot">
       <button class="lsb-btn" onclick="openAuthModal()">AI Settings</button>
-      <button class="lsb-btn" onclick="toggleWorkspace()">Workspace</button>
+      <button class="lsb-btn" onclick="toggleWorkspace()">Saved Papers</button>
       <button class="lsb-btn" onclick="toggleTools()">All Tools (44)</button>
     </div>
   </div>
@@ -624,13 +631,15 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 
     <!-- Mode bar -->
     <div class="mode-bar">
-      <div class="mode-tab on" id="mt-chat" onclick="setMode('chat')"><span>Chat</span></div>
-      <div class="mode-tab" id="mt-search" onclick="setMode('search')"><span>Search</span></div>
-      <div class="mode-tab" id="mt-trials" onclick="setMode('trials')"><span>Trials</span></div>
-      <div class="mode-tab" id="mt-paper" onclick="setMode('paper')"><span>Paper</span></div>
-      <div class="mode-tab" id="mt-preprints" onclick="setMode('preprints')"><span>Preprints</span></div>
-      <div class="mode-tab" id="mt-stats" onclick="setMode('stats')"><span>Stats</span></div>
-      <div class="mode-tab" id="mt-export" onclick="setMode('export')"><span>Export</span></div>
+      <div class="mode-tab on" id="mt-search" onclick="setMode('search')"><span>Search Evidence</span></div>
+      <div class="mode-tab" id="mt-chat" onclick="setMode('chat')"><span>Clinical Chat</span></div>
+      <div class="mode-tab" onclick="toggleWorkspace()"><span>Saved Papers</span></div>
+      <div class="mode-tab" onclick="toggleTools()"><span>Tools</span></div>
+      <div class="mode-tab secondary" id="mt-trials" onclick="setMode('trials')"><span>Trials</span></div>
+      <div class="mode-tab secondary" id="mt-paper" onclick="setMode('paper')"><span>Paper</span></div>
+      <div class="mode-tab secondary" id="mt-preprints" onclick="setMode('preprints')"><span>Preprints</span></div>
+      <div class="mode-tab secondary" id="mt-stats" onclick="setMode('stats')"><span>Stats</span></div>
+      <div class="mode-tab secondary" id="mt-export" onclick="setMode('export')"><span>Export</span></div>
     </div>
 
     <div class="msgs" id="msgs">
@@ -638,8 +647,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <div id="welcome">
         <div class="welcome">
           <div class="wlc-eye">Evidence-based medicine</div>
-          <h2>What are you researching?</h2>
-          <p>Ask a clinical question or choose a workflow below. ClinSearch searches 10+ databases simultaneously and synthesises evidence with GRADE assessment.</p>
+          <h2>Ask a clinical question. Get the best evidence first.</h2>
+          <p>Use Search Evidence for fast clinical answers, PICO filters, GRADE, NNT/NNH and guideline comparison.</p>
+        </div>
+        <div class="home-actions">
+          <button class="home-action primary" onclick="setMode('search');document.getElementById('inp').focus()">Search Evidence</button>
+          <button class="home-action" onclick="setReviewDepth('fast');setMode('search');document.getElementById('inp').focus()">Fast Answer</button>
+          <button class="home-action" onclick="setReviewDepth('deep');setMode('search');document.getElementById('inp').focus()">Deep Review</button>
+          <button class="home-action" onclick="toggleFilterPanel()">PICO / Filters</button>
         </div>
         <div class="wizard">
           <div class="wiz-title">Research workflow</div>
@@ -663,7 +678,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
           </div>
         </div>
         <!-- NNT Quick Calculator -->
-        <div style="margin:1rem 0 0;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.9rem 1rem">
+        <div class="quick-calc" style="margin:1rem 0 0;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.9rem 1rem">
           <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
             <span style="font-size:.85rem;font-weight:600">🧮 NNT / NNH Calculator</span>
             <span style="font-size:.68rem;color:var(--muted)">Absolute risk reduction & number needed to treat</span>
@@ -860,7 +875,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <div class="input-box" style="position:relative">
         <div class="mesh-dropdown" id="meshDropdown"></div>
         <div class="inp-row">
-          <textarea class="inp" id="inp" rows="1" placeholder="Ask a clinical question or enter a topic…" onkeydown="onKey(event)" oninput="resize(this);debounceMeSH(this.value)"></textarea>
+          <textarea class="inp" id="inp" rows="1" placeholder="Ask a clinical question or enter PICO terms…" onkeydown="onKey(event)" oninput="resize(this);debounceMeSH(this.value)"></textarea>
           <button class="send-btn" id="sendBtn" onclick="send()">
             <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </button>
@@ -921,14 +936,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
     </div>
   </div>
 
-  <!-- Workspace (right panel) -->
+  <!-- Saved papers (right panel) -->
   <div class="rsb" id="workspace">
     <div class="rsb-header">
-      <div class="rsb-title">📁 Workspace <span class="rsb-count" id="wsCountBadge">0</span></div>
+      <div class="rsb-title">Saved Papers <span class="rsb-count" id="wsCountBadge">0</span></div>
       <button class="rsb-close" onclick="toggleWorkspace()">✕</button>
     </div>
     <div id="wsPapers">
-      <div class="rsb-empty">Save papers here to build your reading list.<br>Click 💾 on any result.</div>
+      <div class="rsb-empty">Save papers here to compare, annotate and export later.</div>
     </div>
     <div style="padding:.5rem 1rem;border-top:1px solid var(--b1);border-bottom:1px solid var(--b1)">
       <textarea class="rsb-note-input" id="noteInput" rows="2" placeholder="Add a research note…"></textarea>
@@ -969,7 +984,7 @@ const S = {
   aiProvider: '', isDemo: false,
   workspace: [], notes: [],
   sessionId: null,
-  mode: 'chat', qbActive: false,
+  mode: 'search', qbActive: false,
   activeWizard: null,
   reviewDepth: 'fast',
   _searchOffset: 0, _searchQuery: '', _allSearchPapers: [],
@@ -1169,7 +1184,7 @@ function setMode(m) {
   document.getElementById('mt-'+m)?.classList.add('on');
   const placeholders={
     chat:'Ask a clinical question…',
-    search:'Search term or MeSH query…',
+    search:'Ask a clinical question or enter PICO terms…',
     trials:'Condition or intervention for trials…',
     paper:'Enter PMID or DOI…',
     preprints:'Search preprints (medRxiv · bioRxiv)…',
