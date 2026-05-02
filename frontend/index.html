@@ -150,6 +150,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .rank-chip{font-size:.6rem;font-family:var(--mono);border:1px solid var(--b1);border-radius:999px;padding:.1rem .38rem;color:var(--muted);background:var(--s1)}
 .rank-chip.strong{color:var(--green);border-color:rgba(28,164,107,.35)}
 .rank-chip.warn{color:var(--gold);border-color:rgba(190,143,36,.35)}
+.effect-line{font-size:.72rem;color:var(--text);background:var(--bg);border:1px solid var(--b1);border-radius:6px;padding:.32rem .48rem;margin:.45rem 0 .05rem;line-height:1.45}
+.effect-line span{font-family:var(--mono);font-size:.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:.35rem}
 .table-scroll{width:100%;overflow-x:auto}
 
 /* Message */
@@ -1514,9 +1516,16 @@ function extractIntervention(p) {
 }
 
 function extractOutcome(p) {
+  if(p.effect_data?.summary && p.effect_data.summary !== 'NR') return p.effect_data.summary;
   const abs=p.abstract||'';
   const m=abs.match(/(?:primary outcome|outcome|mortality|response|remission|adverse event|risk|hazard ratio|odds ratio|relative risk)[^.;]{0,140}/i);
   return m?m[0]:'NR';
+}
+
+function effectSummaryHtml(p) {
+  const e=p.effect_data;
+  if(!e || !e.summary || e.summary === 'NR') return '';
+  return `<div class="effect-line"><span>Extracted effect</span>${esc(e.summary)}</div>`;
 }
 
 function buildCardHtml(p) {
@@ -1566,6 +1575,7 @@ function buildCardHtml(p) {
       ${p.citations?`<span class="cites">⭐ ${p.citations}</span>`:''}
 	    </div>
 	    ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
+	    ${effectSummaryHtml(p)}
 	    <div class="rank-reasons">${rankReasons(p)}</div>
 	    ${warn}
 	    <div class="r-acts">

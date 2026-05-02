@@ -689,6 +689,79 @@ def _rank_by_evidence(papers: list, query: str = "") -> list:
     return sorted(papers, key=_score)
 
 
+def _parse_float(value: str) -> Optional[float]:
+    try:
+        return float(value.replace(",", "."))
+    except Exception:
+        return None
+
+
+def _extract_effect_data(p: dict) -> dict:
+    """Conservative extraction of common numeric effect signals from title/abstract."""
+    text = " ".join(str(p.get(k) or "") for k in ("title", "abstract"))
+    compact = re.sub(r"\s+", " ", text)
+    data = {"summary": "NR", "measures": [], "event_rates": [], "nnt": None, "certainty": "not_extracted"}
+
+    # RR/OR/HR style estimates, with optional confidence interval.
+    measure_re = re.compile(
+        r"\b(?P<label>hazard ratio|risk ratio|relative risk|odds ratio|HR|RR|OR)\b"
+        r"\s*(?:=|of|was|:)?\s*(?P<value>\d+(?:[\.,]\d+)?)"
+        r"(?:\s*(?:\(|,)?\s*(?:95%\s*)?(?:CI|confidence interval)\s*[:=]?\s*"
+        r"(?P<low>\d+(?:[\.,]\d+)?)\s*(?:-|–|to)\s*(?P<high>\d+(?:[\.,]\d+)?))?",
+        re.I,
+    )
+    for m in measure_re.finditer(compact):
+        value = _parse_float(m.group("value"))
+        if value is None:
+            continue
+        label = m.group("label").upper() if len(m.group("label")) <= 2 else m.group("label").title()
+        item = {"measure": label, "value": value}
+        if m.group("low") and m.group("high"):
+            item["ci"] = [_parse_float(m.group("low")), _parse_float(m.group("high"))]
+        data["measures"].append(item)
+        if len(data["measures"]) >= 3:
+            break
+
+    # Percent event/response rates. Used only as a rough signal for ARR/NNT.
+    rate_re = re.compile(
+        r"(?P<label>[A-Za-z][A-Za-z0-9 /-]{0,50}?)\s*(?:rate|risk|response|remission|mortality|events?)?"
+        r"\s*(?:was|were|=|:)?\s*(?P<value>\d+(?:[\.,]\d+)?)\s*%",
+        re.I,
+    )
+    for m in rate_re.finditer(compact):
+        value = _parse_float(m.group("value"))
+        if value is None:
+            continue
+        label = re.sub(r"\s+", " ", m.group("label")).strip(" ,;:.")
+        if value <= 100:
+            data["event_rates"].append({"label": label[-60:] or "event", "percent": value})
+        if len(data["event_rates"]) >= 4:
+            break
+
+    if len(data["event_rates"]) >= 2:
+        a = data["event_rates"][0]["percent"] / 100
+        b = data["event_rates"][1]["percent"] / 100
+        arr = abs(a - b)
+        if arr > 0:
+            nnt = round(1 / arr)
+            data["nnt"] = {"value": nnt, "absolute_difference_percent": round(arr * 100, 2)}
+
+    parts = []
+    if data["measures"]:
+        m = data["measures"][0]
+        ci = f" ({m['ci'][0]}-{m['ci'][1]})" if m.get("ci") and all(x is not None for x in m["ci"]) else ""
+        parts.append(f"{m['measure']} {m['value']}{ci}")
+    if data["event_rates"]:
+        rates = " vs ".join(f"{r['percent']}%" for r in data["event_rates"][:2])
+        parts.append(rates)
+    if data["nnt"]:
+        parts.append(f"NNT/NNH ~{data['nnt']['value']}")
+    if parts:
+        data["summary"] = " · ".join(parts)
+        data["certainty"] = "abstract_extracted"
+    return data
+
+
 def _paper_flags(p: dict) -> list:
     text = " ".join(str(p.get(k) or "") for k in ("title", "abstract", "journal", "source", "server")).lower()
     pub_types = [str(x).lower() for x in (p.get("publication_types") or [])]
@@ -725,7 +798,7 @@ async def search_all(
     """Parallel search across selected sources with dedup, quality ranking, and caching."""
     pico_query = _build_pico_query(q, patient or "", intervention or "", comparator or "", outcome or "")
     search_q = pico_query if pico_query != q else q
-    cache_key = f"{q}|{search_q}|{sources}|{n}|{offset}|{year_from}|{year_to}|{open_access}|{reviews_only}|{study_type}|{humans}|{pico}|{patient}|{intervention}|{comparator}|{outcome}"
+    cache_key = f"v3|{q}|{search_q}|{sources}|{n}|{offset}|{year_from}|{year_to}|{open_access}|{reviews_only}|{study_type}|{humans}|{pico}|{patient}|{intervention}|{comparator}|{outcome}"
     cached = _cache_get(_search_cache, cache_key, _CACHE_TTL_SEARCH)
     if cached:
         return cached
@@ -772,6 +845,7 @@ async def search_all(
                 p.get("title", ""), p.get("abstract", "")
             )
         p["evidence_flags"] = _paper_flags(p)
+        p["effect_data"] = _extract_effect_data(p)
 
     deduped = _dedupe(combined)
 
