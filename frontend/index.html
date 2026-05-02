@@ -197,6 +197,13 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .mesh-item:hover{background:var(--s3);color:var(--text)}
 /* Result sort/count bar */
 .results-bar{display:flex;align-items:center;gap:.5rem;font-size:.72rem;color:var(--muted);font-family:var(--mono);flex-wrap:wrap}
+.evidence-brief{margin:.45rem 0 .55rem 2.8rem;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.75rem .9rem;display:grid;grid-template-columns:1.1fr 2fr;gap:.8rem;align-items:center}
+.ev-confidence{font-size:.78rem;font-weight:700;color:var(--text);margin-bottom:.18rem}
+.ev-confidence.high{color:var(--green)}.ev-confidence.moderate{color:var(--accent)}.ev-confidence.low{color:var(--gold)}.ev-confidence.insufficient{color:var(--red)}
+.ev-brief-note{font-size:.72rem;color:var(--muted);line-height:1.45}
+.ev-brief-stats{display:flex;gap:.35rem;flex-wrap:wrap}
+.ev-brief-pill{font-family:var(--mono);font-size:.64rem;color:var(--muted);background:var(--s2);border:1px solid var(--b1);border-radius:999px;padding:.15rem .5rem}
+@media(max-width:720px){.evidence-brief{grid-template-columns:1fr;margin-left:0}}
 .sort-select{font-size:.68rem;font-family:var(--mono);background:var(--s2);color:var(--muted);border:1px solid var(--b1);border-radius:4px;padding:.15rem .4rem;cursor:pointer;transition:border-color .1s}
 .sort-select:hover{border-color:var(--accent)}
 /* Load more */
@@ -1397,6 +1404,45 @@ function toggleActionMenu(event, btn) {
   btn.nextElementSibling?.classList.toggle('open');
 }
 
+function evidenceBriefHtml(papers, summary) {
+  const counts = {Guideline:0,'Meta-Analysis':0,'Systematic Review':0,RCT:0,Cohort:0,Observational:0,'Case Report':0,Preprint:0};
+  let danger = 0, warning = 0;
+  (papers||[]).forEach(p=>{
+    const st = p.study_type || '';
+    if(counts[st] !== undefined) counts[st]++;
+    (p.evidence_flags||[]).forEach(f=>{ if(f.level==='danger') danger++; else warning++; });
+  });
+  const best = counts.Guideline ? 'Guideline' : counts['Meta-Analysis'] ? 'Meta-analysis' : counts['Systematic Review'] ? 'Systematic review' : counts.RCT ? 'RCT' : counts.Cohort ? 'Cohort' : counts.Observational ? 'Observational' : '';
+  const total = summary?.total ?? papers.length;
+  const confidence = !total ? 'insufficient' : danger ? 'low' : (counts.Guideline || counts['Meta-Analysis'] || counts['Systematic Review']) ? 'high' : counts.RCT ? 'moderate' : 'low';
+  const labels = {high:'High confidence', moderate:'Moderate confidence', low:'Low confidence', insufficient:'Insufficient evidence'};
+  const note = !total ? 'No evidence retrieved. Broaden the query or sources.' :
+    danger ? 'Important safety/retraction warning detected. Verify before using clinically.' :
+    confidence === 'high' ? `Best evidence found: ${best}. Review applicability before changing practice.` :
+    confidence === 'moderate' ? 'Interventional evidence found, but check sample size, outcomes and harms.' :
+    'Mostly lower-certainty evidence. Treat as hypothesis-generating unless supported by guidelines.';
+  const pills = [
+    ['Guidelines', counts.Guideline],
+    ['Meta-analysis', counts['Meta-Analysis']],
+    ['Systematic reviews', counts['Systematic Review']],
+    ['RCTs', counts.RCT],
+    ['Cohorts', counts.Cohort],
+    ['Warnings', warning + danger],
+  ].filter(x=>x[1]);
+  return `<div class="evidence-brief">
+    <div>
+      <div class="ev-confidence ${confidence}">${labels[confidence]}</div>
+      <div class="ev-brief-note">${esc(note)}</div>
+    </div>
+    <div class="ev-brief-stats">
+      <span class="ev-brief-pill">Best evidence first</span>
+      <span class="ev-brief-pill">${total} papers</span>
+      ${best?`<span class="ev-brief-pill">Best: ${esc(best)}</span>`:''}
+      ${pills.map(([k,v])=>`<span class="ev-brief-pill">${esc(k)}: ${v}</span>`).join('')}
+    </div>
+  </div>`;
+}
+
 function setReviewDepth(depth) {
   S.reviewDepth = depth;
   document.getElementById('fastModeBtn')?.classList.toggle('on', depth !== 'deep');
@@ -1482,6 +1528,10 @@ async function searchMode(query, appendToExisting) {
           </select>
         </div>`;
       document.getElementById('msgs').appendChild(hdr);
+
+      const brief=document.createElement('div');
+      brief.innerHTML=evidenceBriefHtml(papers, d.evidence_summary);
+      document.getElementById('msgs').appendChild(brief.firstElementChild);
 
       // Action buttons
       const actBar=document.createElement('div');actBar.className='srch-actions';
