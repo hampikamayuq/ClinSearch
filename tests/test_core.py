@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT))
 from fastapi.testclient import TestClient
 
 import backend.main as main
-from backend.main import _build_pico_query, _dedupe, _paper_flags, _rank_by_evidence, app
+from backend.main import _build_pico_query, _cache_get, _cache_set, _dedupe, _paper_flags, _rank_by_evidence, _tool_cache, _validate_ai_citations, app
 
 
 def test_pico_query_uses_structured_fields():
@@ -53,6 +53,25 @@ def test_evidence_flags_detect_risk_signals():
     assert {"retracted", "preprint", "low_evidence"} <= types
 
 
+def test_ai_citation_validator_blocks_missing_or_invalid_sources():
+    papers = [{"title": "Trial A", "url": "https://example.org/a"}, {"title": "Trial B"}]
+    assert _validate_ai_citations("Cited [[1] A, 2024](https://example.org/a)", papers)["ok"] is True
+    missing = _validate_ai_citations("No citations here", papers)
+    invalid = _validate_ai_citations("Bad [[3] C, 2024](https://z)", papers)
+    bad_url = _validate_ai_citations("Bad URL [[1] A, 2024](https://wrong.example)", papers)
+    assert missing["missing_citations"] is True
+    assert invalid["invalid_citations"][0]["index"] == 3
+    assert bad_url["invalid_urls"][0]["index"] == 1
+
+
+def test_tool_cache_persists_through_memory_clear():
+    key = "unit-test-cache-key"
+    payload = {"ok": True, "value": 1}
+    _cache_set(_tool_cache, key, payload)
+    _tool_cache.clear()
+    assert _cache_get(_tool_cache, key, 900) == payload
+
+
 def test_health_reports_monitoring_fields():
     client = TestClient(app)
     data = client.get("/health").json()
@@ -69,6 +88,8 @@ def test_metrics_reports_cache_and_database_counts():
     assert "cache" in data
     assert "database" in data
     assert "providers" in data
+    assert "endpoints" in data
+    assert "persistent_tool_entries" in data["cache"]
 
 
 def test_session_and_quota_endpoints():
@@ -114,6 +135,21 @@ def test_ai_tool_success_path_is_cacheable_with_provider():
         res = client.post("/api/ai-tool", json=payload)
     assert res.status_code == 200
     assert res.json()["tool"] == "clinical_bottom_line"
+
+
+def test_frontend_keeps_core_workflow_controls():
+    html = (ROOT / "frontend" / "index.html").read_text()
+    required = [
+        "showJournalClubByKey",
+        "showPatientSummaryByKey",
+        "showPICOByKey",
+        "showEvidenceTable",
+        "setMode('stats')",
+        "saveCurrentSearch",
+        "loadProviderStatus",
+    ]
+    for marker in required:
+        assert marker in html
 
 
 if __name__ == "__main__":

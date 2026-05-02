@@ -8,6 +8,7 @@ Research: PubMed, Semantic Scholar, OpenAlex, ClinicalTrials, Unpaywall
 import sqlite3
 import logging
 import re
+import hashlib
 logger = logging.getLogger("clinsearch")
 import time
 from fastapi import FastAPI, HTTPException, Request, Depends
@@ -87,6 +88,13 @@ def _init_db():
             last_check TEXT,
             created TEXT
         );
+        CREATE TABLE IF NOT EXISTS persistent_cache (
+            namespace TEXT,
+            key_hash TEXT,
+            payload TEXT,
+            ts REAL,
+            PRIMARY KEY (namespace, key_hash)
+        );
     """)
     conn.commit()
     conn.close()
@@ -139,12 +147,14 @@ async def health():
         "status": "ok",
         "version": "3.1.0",
         "ai": {
-            "gemini": {"configured": bool(GEMINI_API_KEY), "status": "configured" if GEMINI_API_KEY else "missing_key"},
-            "groq":   {"configured": bool(GROQ_API_KEY), "status": "configured" if GROQ_API_KEY else "missing_key"},
+            "gemini": _provider_status.get("gemini", {"configured": bool(GEMINI_API_KEY)}),
+            "groq":   _provider_status.get("groq", {"configured": bool(GROQ_API_KEY)}),
         },
         "cache": {
             "search_entries": len(_search_cache),
             "tool_entries":   len(_tool_cache),
+            "persistent_search_entries": _cache_db_count("search"),
+            "persistent_tool_entries": _cache_db_count("tool"),
         },
         "database": {"ok": db_ok, "path": _DB_PATH},
         "latency_ms": latency_ms,
@@ -162,6 +172,16 @@ def _db_count(table: str) -> int:
         return 0
 
 
+def _cache_db_count(namespace: str) -> int:
+    try:
+        conn = sqlite3.connect(_DB_PATH)
+        row = conn.execute("SELECT COUNT(*) FROM persistent_cache WHERE namespace=?", (namespace,)).fetchone()
+        conn.close()
+        return int(row[0] or 0)
+    except Exception:
+        return 0
+
+
 @app.get("/metrics")
 async def metrics():
     started = time.perf_counter()
@@ -173,6 +193,8 @@ async def metrics():
             "tool_entries": len(_tool_cache),
             "search_ttl_seconds": _CACHE_TTL_SEARCH,
             "tool_ttl_seconds": _CACHE_TTL_TOOL,
+            "persistent_search_entries": _cache_db_count("search"),
+            "persistent_tool_entries": _cache_db_count("tool"),
         },
         "database": {
             "path": _DB_PATH,
@@ -181,9 +203,10 @@ async def metrics():
             "alerts": _db_count("alerts"),
         },
         "providers": {
-            "gemini_configured": bool(GEMINI_API_KEY),
-            "groq_configured": bool(GROQ_API_KEY),
+            "gemini": _provider_status.get("gemini", {}),
+            "groq": _provider_status.get("groq", {}),
         },
+        "endpoints": _endpoint_metrics,
     }
 
 
@@ -313,15 +336,102 @@ _search_cache: dict = {}   # query_key → {data, ts}
 _tool_cache:   dict = {}   # tool_key  → {data, ts}
 _CACHE_TTL_SEARCH = 300    # 5 min
 _CACHE_TTL_TOOL   = 900    # 15 min
+_provider_status = {
+    "gemini": {"configured": bool(GEMINI_API_KEY), "status": "configured" if GEMINI_API_KEY else "missing_key", "calls": 0, "errors": 0, "rate_limited": 0, "last_error": "", "last_latency_ms": None},
+    "groq": {"configured": bool(GROQ_API_KEY), "status": "configured" if GROQ_API_KEY else "missing_key", "calls": 0, "errors": 0, "rate_limited": 0, "last_error": "", "last_latency_ms": None},
+}
+_endpoint_metrics: dict = {}
+
+
+@app.middleware("http")
+async def _metrics_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    path = request.url.path
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        elapsed = round((time.perf_counter() - started) * 1000, 2)
+        m = _endpoint_metrics.setdefault(path, {"count": 0, "errors": 0, "last_latency_ms": 0, "max_latency_ms": 0})
+        m["count"] += 1
+        m["last_latency_ms"] = elapsed
+        m["max_latency_ms"] = max(m["max_latency_ms"], elapsed)
+        if "status_code" in locals() and status_code >= 500:
+            m["errors"] += 1
+
+
+def _record_provider(provider: str, ok: bool, latency_ms: float, exc: Exception = None):
+    st = _provider_status.setdefault(provider, {"configured": True, "status": "unknown", "calls": 0, "errors": 0, "rate_limited": 0, "last_error": "", "last_latency_ms": None})
+    st["configured"] = bool(GEMINI_API_KEY if provider == "gemini" else GROQ_API_KEY)
+    st["calls"] += 1
+    st["last_latency_ms"] = round(latency_ms, 2)
+    if ok:
+        st["status"] = "ok"
+        st["last_error"] = ""
+        return
+    st["errors"] += 1
+    msg = str(exc or "")
+    st["last_error"] = msg[:160]
+    if re.search(r"quota|rate|429|limit", msg, re.I):
+        st["rate_limited"] += 1
+        st["status"] = "rate_limited"
+    else:
+        st["status"] = "error"
+
+
+def _cache_namespace(cache: dict) -> str:
+    return "search" if cache is _search_cache else "tool"
+
+
+def _cache_hash(key: str) -> str:
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def _persistent_cache_get(namespace: str, key: str, ttl: int):
+    try:
+        conn = sqlite3.connect(_DB_PATH)
+        row = conn.execute(
+            "SELECT payload, ts FROM persistent_cache WHERE namespace=? AND key_hash=?",
+            (namespace, _cache_hash(key)),
+        ).fetchone()
+        conn.close()
+        if not row:
+            return None
+        payload, ts = row
+        if (time.time() - float(ts or 0)) >= ttl:
+            return None
+        return json.loads(payload)
+    except Exception as e:
+        logger.warning(f"Persistent cache get error: {e}")
+        return None
+
+
+def _persistent_cache_set(namespace: str, key: str, data):
+    try:
+        conn = sqlite3.connect(_DB_PATH)
+        conn.execute(
+            "REPLACE INTO persistent_cache(namespace,key_hash,payload,ts) VALUES(?,?,?,?)",
+            (namespace, _cache_hash(key), json.dumps(data), time.time()),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Persistent cache set error: {e}")
 
 def _cache_get(cache: dict, key: str, ttl: int):
     entry = cache.get(key)
     if entry and (time.time() - entry["ts"]) < ttl:
         return entry["data"]
+    persistent = _persistent_cache_get(_cache_namespace(cache), key, ttl)
+    if persistent is not None:
+        cache[key] = {"data": persistent, "ts": time.time()}
+        return persistent
     return None
 
 def _cache_set(cache: dict, key: str, data):
     cache[key] = {"data": data, "ts": time.time()}
+    _persistent_cache_set(_cache_namespace(cache), key, data)
     if len(cache) > 200:
         oldest = sorted(cache.keys(), key=lambda k: cache[k]["ts"])[:50]
         for k in oldest:
@@ -363,18 +473,24 @@ async def chat(req: ChatRequest, request: Request):
     messages = await _inject_search_context(req.messages)
 
     if GEMINI_API_KEY:
+        started = time.perf_counter()
         try:
             response = await call_gemini(messages, GEMINI_API_KEY)
+            _record_provider("gemini", True, (time.perf_counter() - started) * 1000)
             return {"response": response, "provider": "gemini-flash", "quota_used": True}
         except Exception as e:
+            _record_provider("gemini", False, (time.perf_counter() - started) * 1000, e)
             if "quota" not in str(e).lower() and "rate" not in str(e).lower():
                 raise HTTPException(500, f"Gemini error: {e}")
 
     if GROQ_API_KEY:
+        started = time.perf_counter()
         try:
             response = await call_groq(messages, GROQ_API_KEY)
+            _record_provider("groq", True, (time.perf_counter() - started) * 1000)
             return {"response": response, "provider": "groq-llama", "quota_used": True}
         except Exception as e:
+            _record_provider("groq", False, (time.perf_counter() - started) * 1000, e)
             return ai_provider_error_response("groq", e)
 
     raise HTTPException(503, "No AI provider available. Please add your API key.")
@@ -2061,6 +2177,59 @@ _CITE_INSTRUCTION = (
 )
 
 
+_CITATION_RE = re.compile(r"\[\[(\d+)\][^\]]*\]\(([^)]+)\)")
+
+
+def _validate_ai_citations(text: str, papers: list, require_citations: bool = True) -> dict:
+    """Validate that AI citations point to retrieved paper indexes."""
+    papers = papers or []
+    citations = [{"index": int(n), "url": url} for n, url in _CITATION_RE.findall(text or "")]
+    invalid = [c for c in citations if c["index"] < 1 or c["index"] > min(len(papers), 10)]
+    invalid_url = []
+    for c in citations:
+        if c in invalid:
+            continue
+        p = papers[c["index"] - 1]
+        allowed = [str(x).lower() for x in (
+            p.get("url"),
+            p.get("doi"),
+            f"https://doi.org/{p.get('doi')}" if p.get("doi") else "",
+            p.get("pmid"),
+            f"https://pubmed.ncbi.nlm.nih.gov/{p.get('pmid')}/" if p.get("pmid") else "",
+        ) if x]
+        cited_url = (c.get("url") or "").lower()
+        if allowed and cited_url and not any(a in cited_url or cited_url in a for a in allowed):
+            invalid_url.append(c)
+    missing = bool(require_citations and papers and not citations)
+    return {
+        "ok": not invalid and not invalid_url and not missing,
+        "missing_citations": missing,
+        "invalid_citations": invalid,
+        "invalid_urls": invalid_url,
+        "citation_count": len(citations),
+        "allowed_papers": min(len(papers), 10),
+    }
+
+
+def _blocked_unverified_ai_answer(validation: dict) -> str:
+    reasons = []
+    if validation.get("missing_citations"):
+        reasons.append("the provider returned no verified citations")
+    if validation.get("invalid_citations"):
+        bad = ", ".join(str(x["index"]) for x in validation["invalid_citations"][:5])
+        reasons.append(f"the provider cited papers outside the retrieved set: {bad}")
+    if validation.get("invalid_urls"):
+        bad = ", ".join(str(x["index"]) for x in validation["invalid_urls"][:5])
+        reasons.append(f"citation links did not match PMID/DOI/URL for papers: {bad}")
+    reason = "; ".join(reasons) or "citations could not be verified"
+    return (
+        "⚠️ Evidence answer blocked\n\n"
+        f"The AI output was not shown because {reason}.\n\n"
+        "Use the Evidence Table above, or run the tool again after narrowing the PICO/search. "
+        "ClinSearch only displays synthesis when citations map to real retrieved papers."
+    )
+
+
 def _append_ai_evidence_guardrails(prompt: str, req: AIToolRequest) -> str:
     """Require paper-grounded answers for tools that synthesize retrieved papers."""
     if req.tool in {"forest_plot", "sr_screen"} or not req.papers:
@@ -3576,15 +3745,21 @@ What additional COI information is needed and where to find it."""
     gemini_exc = None
     try:
         if GEMINI_API_KEY:
+            started = time.perf_counter()
             try:
                 raw = await call_gemini(messages, GEMINI_API_KEY)
+                _record_provider("gemini", True, (time.perf_counter() - started) * 1000)
             except Exception as e:
+                _record_provider("gemini", False, (time.perf_counter() - started) * 1000, e)
                 gemini_exc = e
                 raw = None
         if not raw and GROQ_API_KEY:
+            started = time.perf_counter()
             try:
                 raw = await call_groq(messages, GROQ_API_KEY)
+                _record_provider("groq", True, (time.perf_counter() - started) * 1000)
             except Exception as e:
+                _record_provider("groq", False, (time.perf_counter() - started) * 1000, e)
                 return ai_provider_error_response("groq", e)
         if not raw and gemini_exc:
             return ai_provider_error_response("gemini", gemini_exc)
@@ -3609,7 +3784,13 @@ What additional COI information is needed and where to find it."""
             except Exception:
                 return {"tool": req.tool, "decisions": [], "raw": raw}
 
-        result = {"tool": req.tool, "result": raw}
+        validation = _validate_ai_citations(
+            raw,
+            req.papers or [],
+            require_citations=bool(req.papers) and req.tool not in {"forest_plot", "sr_screen"},
+        )
+        result_text = raw if validation["ok"] else _blocked_unverified_ai_answer(validation)
+        result = {"tool": req.tool, "result": result_text, "citation_validation": validation}
         _cache_set(_tool_cache, tool_cache_key, result)
         return result
     except HTTPException:

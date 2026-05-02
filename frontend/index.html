@@ -134,6 +134,15 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .calc-tab{border:1px solid var(--b1);background:var(--s1);color:var(--muted);border-radius:999px;padding:.24rem .65rem;font-size:.68rem;cursor:pointer}
 .calc-tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .calc-section.calc-hidden,.quick-calc.calc-hidden{display:none!important}
+.provider-strip{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;padding:.42rem .85rem;border-bottom:1px solid var(--b1);background:var(--s1);font-size:.68rem;color:var(--muted)}
+.provider-pill{display:inline-flex;align-items:center;gap:.25rem;border:1px solid var(--b1);border-radius:999px;padding:.16rem .48rem;background:var(--bg);font-family:var(--mono)}
+.provider-pill.ok{color:var(--green);border-color:rgba(28,164,107,.35)}
+.provider-pill.warn{color:var(--gold);border-color:rgba(190,143,36,.35)}
+.provider-pill.err{color:var(--red);border-color:rgba(190,68,68,.35)}
+.rank-reasons{display:flex;gap:.25rem;flex-wrap:wrap;margin:.45rem 0 .1rem}
+.rank-chip{font-size:.6rem;font-family:var(--mono);border:1px solid var(--b1);border-radius:999px;padding:.1rem .38rem;color:var(--muted);background:var(--s1)}
+.rank-chip.strong{color:var(--green);border-color:rgba(28,164,107,.35)}
+.rank-chip.warn{color:var(--gold);border-color:rgba(190,143,36,.35)}
 
 /* Message */
 .msg{display:flex;gap:.6rem;animation:fadeUp .2s ease}
@@ -668,6 +677,10 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <div class="mode-tab secondary" id="mt-preprints" onclick="setMode('preprints')"><span>Preprints</span></div>
       <div class="mode-tab secondary" id="mt-export" onclick="setMode('export')"><span>Export</span></div>
     </div>
+    <div class="provider-strip" id="providerStrip">
+      <span>System status</span>
+      <span class="provider-pill">checking providers...</span>
+    </div>
 
     <div class="msgs" id="msgs">
       <!-- Welcome + wizard -->
@@ -1057,6 +1070,34 @@ function save() {
   }));
 }
 
+function providerClass(status) {
+  if(status === 'ok' || status === 'configured') return 'ok';
+  if(status === 'missing_key' || status === 'rate_limited') return 'warn';
+  return 'err';
+}
+
+async function loadProviderStatus() {
+  const el=document.getElementById('providerStrip');
+  if(!el) return;
+  try {
+    const r=await fetch(`${API}/health`);
+    const d=await r.json();
+    const ai=d.ai||{};
+    const cache=d.cache||{};
+    el.innerHTML=`
+      <span>System status</span>
+      ${['gemini','groq'].map(name=>{
+        const p=ai[name]||{};
+        const status=p.status || (p.configured?'configured':'missing_key');
+        const latency=p.last_latency_ms!=null?` · ${p.last_latency_ms}ms`:'';
+        return `<span class="provider-pill ${providerClass(status)}">${name}: ${status}${latency}</span>`;
+      }).join('')}
+      <span class="provider-pill">cache: ${cache.persistent_search_entries||0}/${cache.persistent_tool_entries||0}</span>`;
+  } catch(e) {
+    el.innerHTML='<span>System status</span><span class="provider-pill err">backend unreachable</span>';
+  }
+}
+
 // ── Tools drawer builder ──────────────────────────────────────────────────────
 function buildToolsDrawer() {
   const sections = [
@@ -1131,6 +1172,8 @@ window.addEventListener('load', async () => {
   }
   buildToolsDrawer();
   updateUserUI(); updateAIBadge(); renderWorkspace();
+  loadProviderStatus();
+  setInterval(loadProviderStatus, 60000);
   await fetchQuota();
   loadSessions();
   if (!S.session && !S.userKey) setTimeout(()=>openAuthModal(), 700);
@@ -1370,6 +1413,38 @@ function setLastFiveYears() {
   document.getElementById('last5Chip')?.classList.add('on');
 }
 
+function rankReasons(p) {
+  const reasons=[];
+  const st=p.study_type||'';
+  if(['Guideline','Meta-Analysis','Systematic Review','SR/MA','RCT'].includes(st)) reasons.push({t:'best evidence: '+st,c:'strong'});
+  else if(st) reasons.push({t:'lower certainty: '+st,c:'warn'});
+  if((p.evidence_flags||[]).some(f=>f.type==='retracted')) reasons.push({t:'retraction warning',c:'warn'});
+  if((p.evidence_flags||[]).some(f=>f.type==='preprint')) reasons.push({t:'preprint',c:'warn'});
+  if(Number(p.citations||0)>100) reasons.push({t:'highly cited',c:''});
+  const y=parseInt(String(p.year||'0').slice(0,4),10);
+  if(y && y >= new Date().getFullYear()-5) reasons.push({t:'recent',c:''});
+  if(p.open_access||p.isOpenAccess||p.oa_url) reasons.push({t:'open access',c:''});
+  return reasons.slice(0,4).map(r=>`<span class="rank-chip ${r.c}">${esc(r.t)}</span>`).join('');
+}
+
+function extractPopulation(p) {
+  const abs=p.abstract||'';
+  const m=abs.match(/(?:patients|participants|adults|children|women|men)[^.;]{0,110}/i);
+  return m?m[0]:'NR';
+}
+
+function extractIntervention(p) {
+  const abs=p.abstract||'';
+  const m=abs.match(/(?:intervention|treated with|received|compared with|versus|vs)[^.;]{0,120}/i);
+  return m?m[0]:'NR';
+}
+
+function extractOutcome(p) {
+  const abs=p.abstract||'';
+  const m=abs.match(/(?:primary outcome|outcome|mortality|response|remission|adverse event|risk|hazard ratio|odds ratio|relative risk)[^.;]{0,140}/i);
+  return m?m[0]:'NR';
+}
+
 function buildCardHtml(p) {
   const srcMap = {
     'PubMed':'src-pm','Semantic Scholar':'src-s2','OpenAlex':'src-oa',
@@ -1417,6 +1492,7 @@ function buildCardHtml(p) {
       ${p.citations?`<span class="cites">⭐ ${p.citations}</span>`:''}
 	    </div>
 	    ${abs?`<div class="r-abs" onclick="this.classList.toggle('open')">${esc(abs)}…</div>`:''}
+	    <div class="rank-reasons">${rankReasons(p)}</div>
 	    ${warn}
 	    <div class="r-acts">
 	      <a class="rbtn rbtn-a" href="${url}" target="_blank" rel="noopener">🔗 Open</a>
@@ -1518,15 +1594,17 @@ function inlineEvidenceTableHtml(papers) {
   return `<div class="inline-evidence-table">
     <div class="inline-evidence-title">Evidence Table</div>
     <table class="evidence-table">
-      <thead><tr><th>Paper</th><th>Design</th><th>Identifiers</th><th>Key data</th><th>Warning</th></tr></thead>
+      <thead><tr><th>Paper</th><th>Design</th><th>Population</th><th>Intervention / Comparator</th><th>Outcome / Effect</th><th>Identifiers</th><th>Warning</th></tr></thead>
       <tbody>${rows.map(p=>{
         const ids=[p.pmid?`PMID ${esc(p.pmid)}`:'',p.doi?`DOI ${esc(p.doi)}`:''].filter(Boolean).join('<br>') || 'NR';
         const flags=(p.evidence_flags||[]).map(f=>esc(f.label||f.type)).join('<br>');
         return `<tr>
           <td><a href="${p.url||'#'}" target="_blank" rel="noopener">${esc((p.title||'Untitled').slice(0,120))}</a><br><span style="color:var(--muted)">${esc(p.year||'')} ${p.journal?`· ${esc(p.journal)}`:''}</span></td>
           <td>${esc(p.study_type||'Unclassified')}</td>
+          <td>${esc(extractPopulation(p))}</td>
+          <td>${esc(extractIntervention(p))}</td>
+          <td>${esc(extractOutcome(p))}</td>
           <td>${ids}</td>
-          <td>${esc((p.abstract||'NR').slice(0,150))}${p.abstract&&p.abstract.length>150?'...':''}</td>
           <td>${flags||''}</td>
         </tr>`;
       }).join('')}</tbody>
@@ -1669,6 +1747,7 @@ async function searchMode(query, appendToExisting) {
             <button class="act-btn" onclick="openCaseSimulator()">🏥 Case Sim</button>
           </div>
         </div>
+        <button class="act-btn" onclick="saveCurrentSearch()" style="border-color:rgba(47,109,246,.3)">Save Search</button>
         <button class="act-btn" onclick="saveSearchAlert(window._srchQuery)" style="border-color:rgba(0,212,170,.3)">🔔 Save Alert</button>
       `;
       window._srchPapers=papers; window._srchQuery=query;
@@ -2433,6 +2512,26 @@ function addNote() {
   showAlert('📝 Note saved');
 }
 
+function saveCurrentSearch() {
+  const papers=window._srchPapers||[];
+  const query=window._srchQuery||S._searchQuery||'Search';
+  if(!papers.length){showAlert('No search results to save');return;}
+  const existing=new Set(S.workspace.map(p=>p.id||p.doi||p.pmid||p.title));
+  let added=0;
+  papers.slice(0,12).forEach(p=>{
+    const key=p.id||p.doi||p.pmid||p.title;
+    if(!existing.has(key)){
+      S.workspace.push({...p, saved_from_query:query});
+      existing.add(key);
+      added++;
+    }
+  });
+  S.notes.push({text:`Saved search: ${query} (${papers.length} results)`,ts:Date.now()});
+  save();renderWorkspace();updateWSCount();
+  document.getElementById('workspace').classList.add('open');
+  showAlert(`Saved search and ${added} new papers`);
+}
+
 function annotateWorkspacePaper(index) {
   const paper = S.workspace[index];
   if(!paper) return;
@@ -2753,7 +2852,13 @@ async function runAITool(tool, params, targetEl) {
         targetEl.insertAdjacentHTML('beforeend',`<div style="margin-top:.5rem;font-size:.78rem;color:var(--muted)">Pooled ${d.data.measure}: <strong style="color:var(--accent)">${p.effect?.toFixed(2)}</strong> [${p.ci_lower?.toFixed(2)}–${p.ci_upper?.toFixed(2)}] · I²=${p.i2}% · p=${p.p_value}</div>`);
       }
     } else {
-      targetEl.innerHTML=mdToHtml(d.result||d.raw||'No result');
+      const validation=d.citation_validation;
+      const validationNote=validation && !validation.ok
+        ? `<div class="e-warn red" style="margin-bottom:.5rem">Citation validation failed. Unverified AI synthesis was blocked.</div>`
+        : validation && validation.ok
+          ? `<div class="e-warn" style="margin-bottom:.5rem;color:var(--green);border-color:rgba(28,164,107,.35)">Citations verified against retrieved papers (${validation.citation_count}).</div>`
+          : '';
+      targetEl.innerHTML=validationNote+mdToHtml(d.result||d.raw||'No result');
       injectSaveButtons(targetEl);
     }
   } catch(e) { targetEl.innerHTML=`<span style="color:#ff5050">⚠️ ${e.message}</span>`; }
@@ -2797,7 +2902,7 @@ function showEvidenceTable(papers, query) {
   const rows = [...(papers||[])].sort((a,b)=>(rank[a.study_type||'']??8)-(rank[b.study_type||'']??8)).slice(0,12);
   if(!rows.length) { resultEl.innerHTML='<p style="color:var(--muted)">No papers available for evidence table.</p>'; return; }
   resultEl.innerHTML = `<table class="evidence-table">
-    <thead><tr><th>Evidence</th><th>Paper</th><th>Design</th><th>Identifiers</th><th>Key Extracted Data</th><th>Warnings</th></tr></thead>
+    <thead><tr><th>Evidence</th><th>Paper</th><th>Design</th><th>Population</th><th>Intervention / Comparator</th><th>Outcome / Effect</th><th>Identifiers</th><th>Warnings</th></tr></thead>
     <tbody>${rows.map((p,i)=>{
       const authors=(p.authors||[]).slice(0,2).join(', ');
       const ids=[p.pmid?`PMID ${esc(p.pmid)}`:'',p.doi?`DOI ${esc(p.doi)}`:''].filter(Boolean).join('<br>');
@@ -2806,8 +2911,10 @@ function showEvidenceTable(papers, query) {
         <td>#${i+1}</td>
         <td><a href="${p.url||'#'}" target="_blank" rel="noopener">${esc(p.title||'Untitled')}</a><br><span style="color:var(--muted)">${esc(authors)} ${p.year?`(${esc(p.year)})`:''}</span></td>
         <td>${esc(p.study_type||'Unclassified')}</td>
+        <td>${esc(extractPopulation(p))}</td>
+        <td>${esc(extractIntervention(p))}</td>
+        <td>${esc(extractOutcome(p))}</td>
         <td>${ids||'NR'}</td>
-        <td>${esc((p.abstract||'NR').slice(0,220))}${p.abstract&&p.abstract.length>220?'...':''}</td>
         <td>${flags||''}</td>
       </tr>`;
     }).join('')}</tbody>
@@ -2902,7 +3009,14 @@ async function runTranslation() {
 // ── Sprint 4 Tools ────────────────────────────────────────────────────────────
 async function showRoB(paper) {
   const resultEl=addToolPanel(`⚖️ Risk of Bias — ${(paper.title||'').slice(0,55)}…`);
-  await runAITool('rob',{papers:[paper],query:paper.title||''},resultEl);
+  const st=paper.study_type||'';
+  const domains=st==='RCT'
+    ? ['Randomization process','Deviations from intended interventions','Missing outcome data','Outcome measurement','Selective reporting']
+    : st==='Systematic Review'||st==='Meta-Analysis'||st==='SR/MA'
+      ? ['Protocol registered','Search completeness','Duplicate selection/extraction','Risk of bias included','Publication bias assessed']
+      : ['Confounding','Participant selection','Exposure/intervention measurement','Missing data','Outcome measurement','Selective reporting'];
+  resultEl.innerHTML=`<table class="evidence-table"><thead><tr><th>Domain</th><th>Judgment</th><th>Note</th></tr></thead><tbody>${domains.map(d=>`<tr><td>${esc(d)}</td><td>Needs appraisal</td><td>Use full text when available</td></tr>`).join('')}</tbody></table><div class="tool-result" id="robAi${Date.now()}"></div>`;
+  await runAITool('rob',{papers:[paper],query:paper.title||''},resultEl.querySelector('.tool-result'));
 }
 
 async function showGradeTable(papers, query) {
