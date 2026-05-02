@@ -104,6 +104,14 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .home-action.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .home-action:hover{border-color:var(--accent);color:var(--accent)}
 .home-action.primary:hover{color:#fff;opacity:.92}
+.question-templates{display:flex;gap:.35rem;flex-wrap:wrap;padding:.42rem .85rem;border-bottom:1px solid var(--b1);background:var(--s1)}
+.qt-btn{border:1px solid var(--b1);background:var(--s2);color:var(--muted);border-radius:999px;padding:.18rem .55rem;font-size:.65rem;font-family:var(--mono);cursor:pointer}
+.qt-btn:hover{border-color:var(--accent);color:var(--accent)}
+.pico-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.4rem;padding:.5rem .85rem;border-bottom:1px solid var(--b1);background:var(--s1)}
+.pico-strip input{width:100%;background:var(--bg);border:1px solid var(--b1);border-radius:6px;color:var(--text);font-size:.72rem;padding:.34rem .45rem;outline:none}
+.pico-strip input:focus{border-color:var(--accent)}
+@media(max-width:780px){.pico-strip{grid-template-columns:1fr 1fr}}
+@media(max-width:460px){.pico-strip{grid-template-columns:1fr}}
 
 /* Wizard */
 .wizard{background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:1.25rem;margin-bottom:1.25rem;max-width:600px;margin-left:auto;margin-right:auto}
@@ -121,6 +129,11 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 #welcome.calc-mode .calc-section,#welcome.calc-mode .quick-calc{display:block}
 .calc-home-title{display:none;max-width:760px;margin:1.4rem auto .2rem}
 #welcome.calc-mode .calc-home-title{display:block}
+.calc-tabs{display:none;max-width:760px;margin:.8rem auto 0;gap:.35rem;flex-wrap:wrap;justify-content:center}
+#welcome.calc-mode .calc-tabs{display:flex}
+.calc-tab{border:1px solid var(--b1);background:var(--s1);color:var(--muted);border-radius:999px;padding:.24rem .65rem;font-size:.68rem;cursor:pointer}
+.calc-tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.calc-section.calc-hidden,.quick-calc.calc-hidden{display:none!important}
 
 /* Message */
 .msg{display:flex;gap:.6rem;animation:fadeUp .2s ease}
@@ -301,6 +314,9 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .evidence-table{width:100%;border-collapse:collapse;font-size:.74rem}
 .evidence-table th,.evidence-table td{border-bottom:1px solid var(--b1);padding:.45rem .5rem;text-align:left;vertical-align:top}
 .evidence-table th{font-family:var(--mono);font-size:.65rem;color:var(--muted);font-weight:500}
+.inline-evidence-table{margin:.35rem 0 .6rem 2.8rem;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.7rem .85rem;overflow-x:auto}
+.inline-evidence-title{font-size:.78rem;font-weight:700;margin-bottom:.45rem;color:var(--text)}
+@media(max-width:720px){.inline-evidence-table{margin-left:0}}
 @media(max-width:480px){.stats-visual{grid-template-columns:repeat(2,1fr)}}
 .stat-box{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:.6rem;text-align:center}
 .stat-val{font-family:var(--mono);font-size:1.25rem;margin-bottom:.12rem}
@@ -694,9 +710,16 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
           <h2 style="font-family:var(--serif);font-size:1.35rem;margin-bottom:.35rem">Bedside calculators and risk tools</h2>
           <p style="font-size:.82rem;color:var(--muted);line-height:1.6">Use these tools for quick NNT/NNH, diagnostic probability and common clinical risk scores.</p>
         </div>
+        <div class="calc-tabs">
+          <button class="calc-tab on" data-calc-tab="all" onclick="setCalcCategory('all',this)">All</button>
+          <button class="calc-tab" data-calc-tab="effect" onclick="setCalcCategory('effect',this)">Treatment effect</button>
+          <button class="calc-tab" data-calc-tab="risk" onclick="setCalcCategory('risk',this)">Risk scores</button>
+          <button class="calc-tab" data-calc-tab="diagnostic" onclick="setCalcCategory('diagnostic',this)">Diagnostic</button>
+          <button class="calc-tab" data-calc-tab="organ" onclick="setCalcCategory('organ',this)">Renal/Liver/ICU</button>
+        </div>
 
         <!-- NNT Quick Calculator -->
-        <div class="quick-calc" style="margin:1rem 0 0;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.9rem 1rem">
+        <div class="quick-calc" data-calc="effect" style="margin:1rem 0 0;background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.9rem 1rem">
           <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem">
             <span style="font-size:.85rem;font-weight:600">🧮 NNT / NNH Calculator</span>
             <span style="font-size:.68rem;color:var(--muted)">Absolute risk reduction & number needed to treat</span>
@@ -711,7 +734,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
 
         <!-- CHADS2-VASc Calculator -->
-        <div class="calc-section">
+        <div class="calc-section" data-calc="risk">
           <div class="calc-title">🫀 CHA₂DS₂-VASc Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(AF stroke risk)</span></div>
           <div class="calc-check-grid" id="chadschecks">
             <label class="calc-check"><input type="checkbox" onchange="calcCHADS2()"> CHF or LVSD (+1)</label>
@@ -727,7 +750,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
 
         <!-- CKD-EPI eGFR -->
-        <div class="calc-section">
+        <div class="calc-section" data-calc="organ">
           <div class="calc-title">🩺 CKD-EPI eGFR Calculator</div>
           <div class="calc-grid">
             <div class="calc-field"><label>Creatinine (mg/dL)</label><input type="number" id="ckdCr" step="0.01" min="0.1" placeholder="e.g. 1.2" oninput="calcCKD()"></div>
@@ -738,7 +761,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
 
         <!-- Child-Pugh Score -->
-        <div class="calc-section">
+        <div class="calc-section" data-calc="organ">
           <div class="calc-title">🏥 Child-Pugh Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(cirrhosis severity)</span></div>
           <div class="calc-grid">
             <div class="calc-field"><label>Bilirubin (mg/dL)</label>
@@ -766,7 +789,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
 
         <!-- Wells DVT Score -->
-        <div class="calc-section">
+        <div class="calc-section" data-calc="risk">
           <div class="calc-title">🩸 Wells DVT Score</div>
           <div class="calc-check-grid" id="wellschecks">
             <label class="calc-check"><input type="checkbox" onchange="calcWells()"> Active cancer (+1)</label>
@@ -784,7 +807,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
 
         <!-- SOFA Score -->
-        <div class="calc-section">
+        <div class="calc-section" data-calc="organ">
           <div class="calc-title">🏨 SOFA Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(ICU mortality)</span></div>
           <div class="calc-grid">
             <div class="calc-field"><label>PaO₂/FiO₂ ratio</label>
@@ -816,7 +839,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
 
         <!-- LR / Pre-Post Probability -->
-        <div class="calc-section">
+        <div class="calc-section" data-calc="diagnostic">
           <div class="calc-title">🧮 Pre/Post-Test Probability <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(Fagan nomogram)</span></div>
           <div class="calc-grid">
             <div class="calc-field"><label>Pre-test probability (%)</label><input class="calc-input" id="lrPretest" type="number" min="0" max="100" value="20" oninput="calcLR()"></div>
@@ -827,7 +850,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
 
         <!-- HEART Score -->
-        <div class="calc-section">
+        <div class="calc-section" data-calc="risk">
           <div class="calc-title">❤️ HEART Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(chest pain risk)</span></div>
           <div class="calc-grid">
             <div class="calc-field"><label>History</label>
@@ -865,7 +888,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
         </div>
 
         <!-- Revised Geneva Score (PE) -->
-        <div class="calc-section">
+        <div class="calc-section" data-calc="diagnostic">
           <div class="calc-title">🫁 Revised Geneva Score <span style="font-size:.7rem;font-weight:400;color:var(--muted)">(PE probability)</span></div>
           <div class="calc-check-grid" id="genevachecks">
             <label class="calc-check"><input type="checkbox" onchange="calcGeneva()"> Age &gt; 65 (+1)</label>
@@ -892,6 +915,19 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       </div>
       <div class="input-box" style="position:relative">
         <div class="mesh-dropdown" id="meshDropdown"></div>
+        <div class="question-templates">
+          <button class="qt-btn" onclick="applyQuestionTemplate('treatment')">Treatment</button>
+          <button class="qt-btn" onclick="applyQuestionTemplate('diagnosis')">Diagnosis</button>
+          <button class="qt-btn" onclick="applyQuestionTemplate('prognosis')">Prognosis</button>
+          <button class="qt-btn" onclick="applyQuestionTemplate('harm')">Harm</button>
+          <button class="qt-btn" onclick="applyQuestionTemplate('guidelines')">Guidelines</button>
+        </div>
+        <div class="pico-strip">
+          <input id="picoPatient" placeholder="P: patient/problem">
+          <input id="picoIntervention" placeholder="I: intervention">
+          <input id="picoComparator" placeholder="C: comparator">
+          <input id="picoOutcome" placeholder="O: outcome">
+        </div>
         <div class="inp-row">
           <textarea class="inp" id="inp" rows="1" placeholder="Ask a clinical question or enter PICO terms…" onkeydown="onKey(event)" oninput="resize(this);debounceMeSH(this.value)"></textarea>
           <button class="send-btn" id="sendBtn" onclick="send()">
@@ -939,15 +975,6 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 	            <span class="filter-label">Access</span>
 	            <span class="filter-chip" id="oaOnlyChip" onclick="this.classList.toggle('on')">🔓 Open Access only</span>
 	            <span class="filter-chip" id="humansOnlyChip" onclick="this.classList.toggle('on')">Human studies</span>
-	          </div>
-	          <div class="filter-row">
-	            <span class="filter-label">PICO</span>
-	            <div class="pico-fields">
-	              <input id="picoPatient" placeholder="P: patient/problem">
-	              <input id="picoIntervention" placeholder="I: intervention">
-	              <input id="picoComparator" placeholder="C: comparator">
-	              <input id="picoOutcome" placeholder="O: outcome">
-	            </div>
 	          </div>
         </div>
       </div>
@@ -1201,6 +1228,7 @@ function setMode(m) {
   document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('on'));
   document.getElementById('mt-'+m)?.classList.add('on');
   document.getElementById('welcome')?.classList.toggle('calc-mode', m === 'stats');
+  if(m === 'stats') setCalcCategory('all', document.querySelector('[data-calc-tab="all"]'));
   const placeholders={
     chat:'Ask a clinical question…',
     search:'Ask a clinical question or enter PICO terms…',
@@ -1211,6 +1239,49 @@ function setMode(m) {
     export:'List DOIs to export (one per line)…',
   };
   document.getElementById('inp').placeholder=placeholders[m]||placeholders.chat;
+}
+
+function setCalcCategory(cat, btn) {
+  document.querySelectorAll('.calc-tab').forEach(b=>b.classList.remove('on'));
+  btn?.classList.add('on');
+  document.querySelectorAll('#welcome [data-calc]').forEach(el=>{
+    el.classList.toggle('calc-hidden', cat !== 'all' && el.dataset.calc !== cat);
+  });
+}
+
+function applyQuestionTemplate(type) {
+  const templates = {
+    treatment: {
+      q: 'In [patient/problem], should [intervention] be used compared with [comparator] to improve [outcome]?',
+      p: 'patient/problem', i: 'intervention', c: 'comparator', o: 'outcome'
+    },
+    diagnosis: {
+      q: 'In [patient/problem], how accurate is [test] for diagnosing [condition]?',
+      p: 'patient/problem', i: 'diagnostic test', c: 'reference standard', o: 'sensitivity specificity LR'
+    },
+    prognosis: {
+      q: 'In [patient/problem], what predicts [outcome] and what is the absolute risk?',
+      p: 'patient/problem', i: 'prognostic factor', c: '', o: 'outcome absolute risk'
+    },
+    harm: {
+      q: 'In [patient/problem], what harms are associated with [exposure/intervention]?',
+      p: 'patient/problem', i: 'exposure/intervention', c: 'no exposure/placebo', o: 'adverse events harms'
+    },
+    guidelines: {
+      q: 'What do current guidelines recommend for [patient/problem]?',
+      p: 'patient/problem', i: 'guideline recommendation', c: '', o: 'clinical management'
+    }
+  };
+  const t = templates[type];
+  if(!t) return;
+  setMode('search');
+  document.getElementById('inp').value = t.q;
+  document.getElementById('picoPatient').value = t.p;
+  document.getElementById('picoIntervention').value = t.i;
+  document.getElementById('picoComparator').value = t.c;
+  document.getElementById('picoOutcome').value = t.o;
+  document.getElementById('picoChip')?.classList.add('on');
+  document.getElementById('inp').focus();
 }
 
 // ── Wizard ─────────────────────────────────────────────────────────────────────
@@ -1236,15 +1307,12 @@ function onKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}
 function resize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px';}
 async function newChat() {
   S.history=[];
-  document.getElementById('msgs').innerHTML='';
-  const welcome=document.createElement('div'); welcome.id='welcome';
-  welcome.innerHTML=`<div class="welcome"><div class="wlc-eye">Evidence-based medicine</div><h2>What are you researching?</h2><p>Choose your workflow or just ask a clinical question.</p></div>`;
-  document.getElementById('msgs').appendChild(welcome);
   // Create a fresh session
   try{
     const r=await fetch(`${API}/api/session`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create',data:{topic:'New session'}})});
     const d=await r.json(); S.sessionId=d.id; save(); loadSessions();
   }catch(e){}
+  location.reload();
 }
 
 async function send() {
@@ -1443,6 +1511,29 @@ function evidenceBriefHtml(papers, summary) {
   </div>`;
 }
 
+function inlineEvidenceTableHtml(papers) {
+  const rank = {'Guideline':0,'Meta-Analysis':1,'Systematic Review':2,'SR/MA':2,'RCT':3,'Cohort':4,'Observational':5,'Case Report':6,'Preprint':7,'':8};
+  const rows = [...(papers||[])].sort((a,b)=>(rank[a.study_type||'']??8)-(rank[b.study_type||'']??8)).slice(0,5);
+  if(!rows.length) return '';
+  return `<div class="inline-evidence-table">
+    <div class="inline-evidence-title">Evidence Table</div>
+    <table class="evidence-table">
+      <thead><tr><th>Paper</th><th>Design</th><th>Identifiers</th><th>Key data</th><th>Warning</th></tr></thead>
+      <tbody>${rows.map(p=>{
+        const ids=[p.pmid?`PMID ${esc(p.pmid)}`:'',p.doi?`DOI ${esc(p.doi)}`:''].filter(Boolean).join('<br>') || 'NR';
+        const flags=(p.evidence_flags||[]).map(f=>esc(f.label||f.type)).join('<br>');
+        return `<tr>
+          <td><a href="${p.url||'#'}" target="_blank" rel="noopener">${esc((p.title||'Untitled').slice(0,120))}</a><br><span style="color:var(--muted)">${esc(p.year||'')} ${p.journal?`· ${esc(p.journal)}`:''}</span></td>
+          <td>${esc(p.study_type||'Unclassified')}</td>
+          <td>${ids}</td>
+          <td>${esc((p.abstract||'NR').slice(0,150))}${p.abstract&&p.abstract.length>150?'...':''}</td>
+          <td>${flags||''}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
 function setReviewDepth(depth) {
   S.reviewDepth = depth;
   document.getElementById('fastModeBtn')?.classList.toggle('on', depth !== 'deep');
@@ -1532,6 +1623,10 @@ async function searchMode(query, appendToExisting) {
       const brief=document.createElement('div');
       brief.innerHTML=evidenceBriefHtml(papers, d.evidence_summary);
       document.getElementById('msgs').appendChild(brief.firstElementChild);
+
+      const inlineTable=document.createElement('div');
+      inlineTable.innerHTML=inlineEvidenceTableHtml(papers);
+      if(inlineTable.firstElementChild) document.getElementById('msgs').appendChild(inlineTable.firstElementChild);
 
       // Action buttons
       const actBar=document.createElement('div');actBar.className='srch-actions';
