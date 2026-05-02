@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT))
 from fastapi.testclient import TestClient
 
 import backend.main as main
-from backend.main import _build_pico_query, _cache_get, _cache_set, _dedupe, _extract_effect_data, _paper_flags, _rank_by_evidence, _tool_cache, _validate_ai_citations, app
+from backend.main import _build_pico_query, _cache_get, _cache_set, _dedupe, _extract_effect_data, _grade_signal, _grade_summary, _paper_flags, _rank_by_evidence, _tool_cache, _validate_ai_citations, app
 
 
 def test_pico_query_uses_structured_fields():
@@ -62,6 +62,15 @@ def test_effect_extraction_detects_ratios_and_nnt_signal():
     assert data["measures"][0]["value"] == 0.72
     assert data["nnt"]["value"] == 20
     assert "NNT/NNH" in data["summary"]
+
+
+def test_grade_signal_uses_design_flags_and_effects():
+    high = _grade_signal({"study_type": "Meta-Analysis", "effect_data": {"summary": "RR 0.8"}})
+    low = _grade_signal({"study_type": "Cohort", "evidence_flags": [{"type": "low_evidence", "level": "warning"}], "effect_data": {"summary": "NR"}})
+    summary = _grade_summary([{"grade_signal": high}, {"grade_signal": low}])
+    assert high["certainty"] == "high"
+    assert low["certainty"] == "low"
+    assert summary["overall"] == "high"
 
 
 def test_ai_citation_validator_blocks_missing_or_invalid_sources():
@@ -161,6 +170,7 @@ def test_frontend_keeps_core_workflow_controls():
         "showSystemDashboard",
         "mt-system",
         "effectSummaryHtml",
+        "gradeHtml",
     ]
     for marker in required:
         assert marker in html

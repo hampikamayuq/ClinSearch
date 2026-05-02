@@ -777,6 +777,66 @@ def _paper_flags(p: dict) -> list:
     return flags
 
 
+def _grade_signal(p: dict) -> dict:
+    """Deterministic GRADE starting point; not a substitute for full appraisal."""
+    study_type = p.get("study_type") or ""
+    flags = p.get("evidence_flags") or []
+    effect_data = p.get("effect_data") or {}
+    has_danger = any(f.get("level") == "danger" for f in flags)
+    has_low_signal = any(f.get("type") in {"low_evidence", "preprint"} for f in flags)
+    has_effect = bool(effect_data.get("summary") and effect_data.get("summary") != "NR")
+
+    if has_danger:
+        certainty = "very_low"
+        reasons = ["serious publication safety signal"]
+    elif study_type in {"Guideline", "Meta-Analysis", "Systematic Review", "SR/MA"}:
+        certainty = "high"
+        reasons = [f"high-level evidence type: {study_type}"]
+    elif study_type == "RCT":
+        certainty = "moderate"
+        reasons = ["randomized trial evidence"]
+    elif study_type in {"Cohort", "Observational"}:
+        certainty = "low"
+        reasons = ["observational evidence"]
+    else:
+        certainty = "very_low"
+        reasons = ["unclassified or low-level evidence"]
+
+    if has_low_signal and certainty in {"high", "moderate"}:
+        certainty = "moderate" if certainty == "high" else "low"
+        reasons.append("downgraded for preprint/lower-certainty warning")
+    if not has_effect:
+        reasons.append("no numeric effect extracted from abstract")
+    else:
+        reasons.append("numeric effect signal extracted from abstract")
+
+    symbols = {
+        "high": "⊕⊕⊕⊕",
+        "moderate": "⊕⊕⊕◯",
+        "low": "⊕⊕◯◯",
+        "very_low": "⊕◯◯◯",
+    }
+    labels = {"high": "High", "moderate": "Moderate", "low": "Low", "very_low": "Very low"}
+    return {"certainty": certainty, "label": labels[certainty], "symbols": symbols[certainty], "reasons": reasons}
+
+
+def _grade_summary(papers: list) -> dict:
+    counts = {"high": 0, "moderate": 0, "low": 0, "very_low": 0}
+    for p in papers or []:
+        certainty = ((p.get("grade_signal") or {}).get("certainty")) or "very_low"
+        if certainty in counts:
+            counts[certainty] += 1
+    if counts["high"]:
+        overall = "high"
+    elif counts["moderate"]:
+        overall = "moderate"
+    elif counts["low"]:
+        overall = "low"
+    else:
+        overall = "very_low"
+    return {"overall": overall, "counts": counts}
+
+
 @app.get("/api/search")
 async def search_all(
     q: str,
@@ -798,7 +858,7 @@ async def search_all(
     """Parallel search across selected sources with dedup, quality ranking, and caching."""
     pico_query = _build_pico_query(q, patient or "", intervention or "", comparator or "", outcome or "")
     search_q = pico_query if pico_query != q else q
-    cache_key = f"v3|{q}|{search_q}|{sources}|{n}|{offset}|{year_from}|{year_to}|{open_access}|{reviews_only}|{study_type}|{humans}|{pico}|{patient}|{intervention}|{comparator}|{outcome}"
+    cache_key = f"v4|{q}|{search_q}|{sources}|{n}|{offset}|{year_from}|{year_to}|{open_access}|{reviews_only}|{study_type}|{humans}|{pico}|{patient}|{intervention}|{comparator}|{outcome}"
     cached = _cache_get(_search_cache, cache_key, _CACHE_TTL_SEARCH)
     if cached:
         return cached
@@ -846,6 +906,7 @@ async def search_all(
             )
         p["evidence_flags"] = _paper_flags(p)
         p["effect_data"] = _extract_effect_data(p)
+        p["grade_signal"] = _grade_signal(p)
 
     deduped = _dedupe(combined)
 
@@ -873,6 +934,7 @@ async def search_all(
         "has_guideline": any(t == "Guideline" for t in types),
         "all_observational": bool(ranked) and all(t in ("Cohort", "Observational", "Case Report", "") for t in types),
         "total": len(ranked),
+        "grade": _grade_summary(ranked),
     }
 
     response = {"results": ranked, "total": len(ranked), "query": q,

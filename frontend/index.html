@@ -1528,6 +1528,12 @@ function effectSummaryHtml(p) {
   return `<div class="effect-line"><span>Extracted effect</span>${esc(e.summary)}</div>`;
 }
 
+function gradeHtml(p) {
+  const g=p.grade_signal;
+  if(!g) return 'NR';
+  return `${esc(g.symbols||'')} ${esc(g.label||'NR')}`;
+}
+
 function buildCardHtml(p) {
   const srcMap = {
     'PubMed':'src-pm','Semantic Scholar':'src-s2','OpenAlex':'src-oa',
@@ -1643,6 +1649,8 @@ function evidenceBriefHtml(papers, summary) {
   const best = counts.Guideline ? 'Guideline' : counts['Meta-Analysis'] ? 'Meta-analysis' : counts['Systematic Review'] ? 'Systematic review' : counts.RCT ? 'RCT' : counts.Cohort ? 'Cohort' : counts.Observational ? 'Observational' : '';
   const total = summary?.total ?? papers.length;
   const confidence = !total ? 'insufficient' : danger ? 'low' : (counts.Guideline || counts['Meta-Analysis'] || counts['Systematic Review']) ? 'high' : counts.RCT ? 'moderate' : 'low';
+  const grade = summary?.grade;
+  const gradeLabel = grade?.overall ? grade.overall.replace('_',' ') : '';
   const labels = {high:'High confidence', moderate:'Moderate confidence', low:'Low confidence', insufficient:'Insufficient evidence'};
   const note = !total ? 'No evidence retrieved. Broaden the query or sources.' :
     danger ? 'Important safety/retraction warning detected. Verify before using clinically.' :
@@ -1666,6 +1674,7 @@ function evidenceBriefHtml(papers, summary) {
       <span class="ev-brief-pill">Best evidence first</span>
       <span class="ev-brief-pill">${total} papers</span>
       ${best?`<span class="ev-brief-pill">Best: ${esc(best)}</span>`:''}
+      ${gradeLabel?`<span class="ev-brief-pill">Auto GRADE: ${esc(gradeLabel)}</span>`:''}
       ${pills.map(([k,v])=>`<span class="ev-brief-pill">${esc(k)}: ${v}</span>`).join('')}
     </div>
   </div>`;
@@ -1678,13 +1687,14 @@ function inlineEvidenceTableHtml(papers) {
   return `<div class="inline-evidence-table">
     <div class="inline-evidence-title">Evidence Table</div>
     <table class="evidence-table">
-      <thead><tr><th>Paper</th><th>Design</th><th>Population</th><th>Intervention / Comparator</th><th>Outcome / Effect</th><th>Identifiers</th><th>Warning</th></tr></thead>
+      <thead><tr><th>Paper</th><th>Design</th><th>Auto GRADE</th><th>Population</th><th>Intervention / Comparator</th><th>Outcome / Effect</th><th>Identifiers</th><th>Warning</th></tr></thead>
       <tbody>${rows.map(p=>{
         const ids=[p.pmid?`PMID ${esc(p.pmid)}`:'',p.doi?`DOI ${esc(p.doi)}`:''].filter(Boolean).join('<br>') || 'NR';
         const flags=(p.evidence_flags||[]).map(f=>esc(f.label||f.type)).join('<br>');
         return `<tr>
           <td><a href="${p.url||'#'}" target="_blank" rel="noopener">${esc((p.title||'Untitled').slice(0,120))}</a><br><span style="color:var(--muted)">${esc(p.year||'')} ${p.journal?`· ${esc(p.journal)}`:''}</span></td>
           <td>${esc(p.study_type||'Unclassified')}</td>
+          <td>${gradeHtml(p)}</td>
           <td>${esc(extractPopulation(p))}</td>
           <td>${esc(extractIntervention(p))}</td>
           <td>${esc(extractOutcome(p))}</td>
@@ -2986,7 +2996,7 @@ function showEvidenceTable(papers, query) {
   const rows = [...(papers||[])].sort((a,b)=>(rank[a.study_type||'']??8)-(rank[b.study_type||'']??8)).slice(0,12);
   if(!rows.length) { resultEl.innerHTML='<p style="color:var(--muted)">No papers available for evidence table.</p>'; return; }
   resultEl.innerHTML = `<table class="evidence-table">
-    <thead><tr><th>Evidence</th><th>Paper</th><th>Design</th><th>Population</th><th>Intervention / Comparator</th><th>Outcome / Effect</th><th>Identifiers</th><th>Warnings</th></tr></thead>
+    <thead><tr><th>Evidence</th><th>Paper</th><th>Design</th><th>Auto GRADE</th><th>Population</th><th>Intervention / Comparator</th><th>Outcome / Effect</th><th>Identifiers</th><th>Warnings</th></tr></thead>
     <tbody>${rows.map((p,i)=>{
       const authors=(p.authors||[]).slice(0,2).join(', ');
       const ids=[p.pmid?`PMID ${esc(p.pmid)}`:'',p.doi?`DOI ${esc(p.doi)}`:''].filter(Boolean).join('<br>');
@@ -2995,6 +3005,7 @@ function showEvidenceTable(papers, query) {
         <td>#${i+1}</td>
         <td><a href="${p.url||'#'}" target="_blank" rel="noopener">${esc(p.title||'Untitled')}</a><br><span style="color:var(--muted)">${esc(authors)} ${p.year?`(${esc(p.year)})`:''}</span></td>
         <td>${esc(p.study_type||'Unclassified')}</td>
+        <td>${gradeHtml(p)}</td>
         <td>${esc(extractPopulation(p))}</td>
         <td>${esc(extractIntervention(p))}</td>
         <td>${esc(extractOutcome(p))}</td>
