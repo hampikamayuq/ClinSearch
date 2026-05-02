@@ -139,6 +139,13 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
 .provider-pill.ok{color:var(--green);border-color:rgba(28,164,107,.35)}
 .provider-pill.warn{color:var(--gold);border-color:rgba(190,143,36,.35)}
 .provider-pill.err{color:var(--red);border-color:rgba(190,68,68,.35)}
+.monitor-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.65rem;margin:.5rem 0}
+.monitor-card{background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:.8rem}
+.monitor-k{font-size:.64rem;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.3rem}
+.monitor-v{font-size:1.05rem;font-weight:700;color:var(--text);word-break:break-word}
+.monitor-sub{font-size:.72rem;color:var(--muted);margin-top:.25rem;line-height:1.45}
+.monitor-list{display:grid;gap:.35rem;margin-top:.5rem}
+.monitor-row{display:flex;align-items:center;justify-content:space-between;gap:.7rem;border-top:1px solid var(--b1);padding-top:.35rem;font-size:.73rem;color:var(--muted)}
 .rank-reasons{display:flex;gap:.25rem;flex-wrap:wrap;margin:.45rem 0 .1rem}
 .rank-chip{font-size:.6rem;font-family:var(--mono);border:1px solid var(--b1);border-radius:999px;padding:.1rem .38rem;color:var(--muted);background:var(--s1)}
 .rank-chip.strong{color:var(--green);border-color:rgba(28,164,107,.35)}
@@ -506,6 +513,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
   .r-acts .rbtn,.act-btn,.home-action{min-height:34px}
   .results-bar{width:100%}
   .tool-panel,.srch-actions{margin-left:0}
+  .monitor-grid{grid-template-columns:1fr}
 }
 @media(max-width:480px){
   .hbadge{display:none}
@@ -693,6 +701,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <div class="mode-tab secondary" id="mt-paper" onclick="setMode('paper')"><span>Paper</span></div>
       <div class="mode-tab secondary" id="mt-preprints" onclick="setMode('preprints')"><span>Preprints</span></div>
       <div class="mode-tab secondary" id="mt-export" onclick="setMode('export')"><span>Export</span></div>
+      <div class="mode-tab" id="mt-system" onclick="setMode('system')"><span>System</span></div>
     </div>
     <div class="provider-strip" id="providerStrip">
       <span>System status</span>
@@ -1115,6 +1124,52 @@ async function loadProviderStatus() {
   }
 }
 
+function statusClass(status) {
+  return providerClass(status || 'unknown');
+}
+
+async function showSystemDashboard() {
+  document.getElementById('systemDashboard')?.remove();
+  const wrap=document.createElement('div');
+  wrap.id='systemDashboard';
+  wrap.className='tool-panel';
+  wrap.innerHTML=`<div class="tool-panel-hdr"><strong>System Monitoring</strong><button class="act-btn" onclick="showSystemDashboard()">Refresh</button></div><div class="tool-result" style="color:var(--muted);font-size:.82rem">Loading health and metrics...</div>`;
+  document.getElementById('msgs').prepend(wrap);
+  const target=wrap.querySelector('.tool-result');
+  try {
+    const [healthRes, metricsRes] = await Promise.all([
+      fetch(`${API}/health`),
+      fetch(`${API}/metrics`)
+    ]);
+    const health=await healthRes.json();
+    const metrics=await metricsRes.json();
+    const providers=metrics.providers||health.ai||{};
+    const cache=metrics.cache||health.cache||{};
+    const db=metrics.database||health.database||{};
+    const endpoints=Object.entries(metrics.endpoints||{}).sort((a,b)=>(b[1].count||0)-(a[1].count||0)).slice(0,8);
+    target.innerHTML=`
+      <div class="monitor-grid">
+        <div class="monitor-card"><div class="monitor-k">Backend</div><div class="monitor-v">${esc(health.status||metrics.status||'unknown')}</div><div class="monitor-sub">health ${health.latency_ms??'NR'} ms</div></div>
+        <div class="monitor-card"><div class="monitor-k">Database</div><div class="monitor-v">${db.ok===false?'not ok':'ok'}</div><div class="monitor-sub">${esc(db.path||'NR')}</div></div>
+        <div class="monitor-card"><div class="monitor-k">Persistent cache</div><div class="monitor-v">${cache.persistent_search_entries||0}/${cache.persistent_tool_entries||0}</div><div class="monitor-sub">search/tool entries</div></div>
+      </div>
+      <div class="monitor-grid">
+        ${['gemini','groq'].map(name=>{
+          const p=providers[name]||{};
+          const status=p.status || (p.configured?'configured':'missing_key');
+          return `<div class="monitor-card"><div class="monitor-k">${name}</div><div class="monitor-v provider-pill ${statusClass(status)}" style="display:inline-flex">${esc(status)}</div><div class="monitor-sub">calls ${p.calls||0} · errors ${p.errors||0} · rate limit ${p.rate_limited||0}${p.last_latency_ms!=null?` · ${p.last_latency_ms} ms`:''}</div>${p.last_error?`<div class="monitor-sub">${esc(p.last_error)}</div>`:''}</div>`;
+        }).join('')}
+        <div class="monitor-card"><div class="monitor-k">Sessions</div><div class="monitor-v">${db.sessions||0}</div><div class="monitor-sub">${db.workspace_items||0} workspace items · ${db.alerts||0} alerts</div></div>
+      </div>
+      <div class="monitor-card">
+        <div class="monitor-k">Endpoint activity</div>
+        <div class="monitor-list">${endpoints.length?endpoints.map(([path,m])=>`<div class="monitor-row"><span>${esc(path)}</span><span>${m.count||0} calls · ${m.errors||0} errors · ${m.last_latency_ms||0} ms</span></div>`).join(''):'<div class="monitor-sub">No endpoint metrics yet.</div>'}</div>
+      </div>`;
+  } catch(e) {
+    target.innerHTML=`<span style="color:var(--red)">Could not load monitoring data: ${esc(e.message)}</span>`;
+  }
+}
+
 // ── Tools drawer builder ──────────────────────────────────────────────────────
 function buildToolsDrawer() {
   const sections = [
@@ -1297,8 +1352,10 @@ function setMode(m) {
     preprints:'Search preprints (medRxiv · bioRxiv)…',
     stats:'Use the calculators above, or ask a statistics question…',
     export:'List DOIs to export (one per line)…',
+    system:'Monitor providers, cache, database and endpoint latency…',
   };
   document.getElementById('inp').placeholder=placeholders[m]||placeholders.chat;
+  if(m === 'system') showSystemDashboard();
 }
 
 function setCalcCategory(cat, btn) {

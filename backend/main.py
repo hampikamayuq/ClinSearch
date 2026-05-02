@@ -55,7 +55,20 @@ TIMEOUT = 20
 FREE_DAILY_LIMIT = None
 _DB_PATH = os.environ.get("CLINSEARCH_DB_PATH", "/tmp/clinsearch.db")
 
+
+def _ensure_db_path():
+    global _DB_PATH
+    parent = os.path.dirname(_DB_PATH)
+    if not parent:
+        return
+    try:
+        os.makedirs(parent, exist_ok=True)
+    except Exception as e:
+        logger.warning(f"Could not create DB directory {parent}; falling back to /tmp: {e}")
+        _DB_PATH = "/tmp/clinsearch.db"
+
 def _init_db():
+    _ensure_db_path()
     conn = sqlite3.connect(_DB_PATH)
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS quotas (

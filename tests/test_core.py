@@ -147,6 +147,8 @@ def test_frontend_keeps_core_workflow_controls():
         "setMode('stats')",
         "saveCurrentSearch",
         "loadProviderStatus",
+        "showSystemDashboard",
+        "mt-system",
     ]
     for marker in required:
         assert marker in html

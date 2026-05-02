@@ -20,6 +20,8 @@ services:
         value: https://clinsearch.vercel.app
       - key: BACKEND_URL
         value: https://clinsearch-api.onrender.com
+      - key: CLINSEARCH_DB_PATH
+        value: /var/data/clinsearch.db
       - key: PUBMED_API_KEY
         sync: false
       - key: PUBMED_EMAIL

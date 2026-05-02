@@ -29,6 +29,21 @@ test.beforeEach(async ({ page }) => {
   await page.route('https://clinsearch.onrender.com/api/session', async route => {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'test-session', sessions: [] }) });
   });
+  await page.route('https://clinsearch.onrender.com/metrics', async route => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        status: 'ok',
+        cache: { persistent_search_entries: 3, persistent_tool_entries: 2 },
+        database: { ok: true, path: '/var/data/clinsearch.db', sessions: 1, workspace_items: 0, alerts: 0 },
+        providers: {
+          gemini: { status: 'ok', configured: true, calls: 2, errors: 0, rate_limited: 0, last_latency_ms: 120 },
+          groq: { status: 'configured', configured: true, calls: 0, errors: 0, rate_limited: 0 }
+        },
+        endpoints: { '/api/search': { count: 4, errors: 0, last_latency_ms: 88, max_latency_ms: 120 } }
+      })
+    });
+  });
 });
 
 test('core navigation and clinical controls render', async ({ page }) => {
@@ -46,6 +61,10 @@ test('core navigation and clinical controls render', async ({ page }) => {
   await expect(page.getByText('Bedside calculators and risk tools')).toBeVisible();
   await page.getByRole('button', { name: 'Risk scores' }).click();
   await expect(page.getByText('CHA₂DS₂-VASc Score')).toBeVisible();
+
+  await page.locator('#mt-system').click();
+  await expect(page.getByText('System Monitoring')).toBeVisible();
+  await expect(page.getByText('/var/data/clinsearch.db')).toBeVisible();
 });
 
 test('mobile drawer, workspace, and tables stay reachable', async ({ page }) => {
