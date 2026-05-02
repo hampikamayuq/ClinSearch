@@ -152,6 +152,41 @@ async def health():
     }
 
 
+def _db_count(table: str) -> int:
+    try:
+        conn = sqlite3.connect(_DB_PATH)
+        row = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
+        conn.close()
+        return int(row[0] or 0)
+    except Exception:
+        return 0
+
+
+@app.get("/metrics")
+async def metrics():
+    started = time.perf_counter()
+    return {
+        "status": "ok",
+        "uptime_probe_ms": round((time.perf_counter() - started) * 1000, 2),
+        "cache": {
+            "search_entries": len(_search_cache),
+            "tool_entries": len(_tool_cache),
+            "search_ttl_seconds": _CACHE_TTL_SEARCH,
+            "tool_ttl_seconds": _CACHE_TTL_TOOL,
+        },
+        "database": {
+            "path": _DB_PATH,
+            "sessions": _db_count("sessions"),
+            "workspace_items": _db_count("workspace"),
+            "alerts": _db_count("alerts"),
+        },
+        "providers": {
+            "gemini_configured": bool(GEMINI_API_KEY),
+            "groq_configured": bool(GROQ_API_KEY),
+        },
+    }
+
+
 # ── Google OAuth ──────────────────────────────────────────────────────────────
 @app.get("/auth/google")
 async def google_login():

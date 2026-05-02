@@ -62,6 +62,15 @@ def test_health_reports_monitoring_fields():
     assert "gemini" in data["ai"]
 
 
+def test_metrics_reports_cache_and_database_counts():
+    client = TestClient(app)
+    data = client.get("/metrics").json()
+    assert data["status"] == "ok"
+    assert "cache" in data
+    assert "database" in data
+    assert "providers" in data
+
+
 def test_session_and_quota_endpoints():
     client = TestClient(app)
     created = client.post("/api/session", json={"action": "create", "data": {"topic": "test"}}).json()

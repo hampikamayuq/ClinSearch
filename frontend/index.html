@@ -947,6 +947,8 @@ header{display:flex;align-items:center;justify-content:space-between;padding:0 1
       <button class="rsb-export-btn" id="exp-bib" onclick="exportWS('bibtex',this)">📝 Export BibTeX (LaTeX)</button>
       <button class="rsb-export-btn" id="exp-csv" onclick="exportWS('csv',this)">📊 Export CSV (Rayyan)</button>
       <button class="rsb-export-btn" id="exp-van" onclick="exportWS('vancouver',this)">📖 Vancouver bibliography</button>
+      <button class="rsb-export-btn" onclick="compareWorkspace()">⚖️ Compare saved papers</button>
+      <button class="rsb-export-btn" onclick="showEvidenceTable(S.workspace,'Workspace')">📋 Evidence table</button>
       <button class="rsb-export-btn" id="exp-sum" onclick="exportWS('summary',this)">🤖 AI synthesis of saved papers</button>
     </div>
   </div>
@@ -2227,12 +2229,14 @@ function renderWorkspace() {
   if(!S.workspace.length){
     cont.innerHTML='<div class="rsb-empty">Save papers here to build your reading list.<br>Click 💾 on any result.</div>';
   } else {
-    cont.innerHTML=S.workspace.map(p=>`
+    cont.innerHTML=S.workspace.map((p,i)=>`
       <div class="rsb-paper">
-        <div class="rsp-title">${p.title}</div>
+        <div class="rsp-title">${esc(p.title||'Untitled')}</div>
         <div class="rsp-meta">${p.authors?.[0]||''} · ${p.year||''} · ${p.journal||''}</div>
+        ${p.note?`<div class="note-item" style="margin:.35rem 0 0">📝 ${esc(p.note)}</div>`:''}
         <div class="rsp-acts">
           ${p.url?`<a class="rbtn rbtn-a" href="${p.url}" target="_blank" style="font-size:.67rem;padding:.15rem .42rem">View</a>`:''}
+          <button class="rsp-rm" onclick="annotateWorkspacePaper(${i})">Note</button>
           <button class="rsp-rm" onclick="removePaper('${p.id}')">✕ Remove</button>
         </div>
       </div>`).join('');
@@ -2253,8 +2257,29 @@ function addNote() {
   if(!v)return;
   S.notes.push({text:v,ts:Date.now()});
   save();renderWorkspace();
+  if(S.sessionId) {
+    fetch(`${API}/api/session`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:S.sessionId,action:'add_note',data:{text:v}})
+    }).catch(()=>{});
+  }
   document.getElementById('noteInput').value='';
   showAlert('📝 Note saved');
+}
+
+function annotateWorkspacePaper(index) {
+  const paper = S.workspace[index];
+  if(!paper) return;
+  const note = prompt('Note for this paper:', paper.note || '');
+  if(note === null) return;
+  paper.note = note.trim();
+  save(); renderWorkspace();
+}
+
+async function compareWorkspace() {
+  if(S.workspace.length < 2) { showAlert('Save at least 2 papers to compare'); return; }
+  const resultEl=addToolPanel('⚖️ Workspace Comparison');
+  await runAITool('systematic_comparison',{papers:S.workspace,query:'saved workspace papers'},resultEl);
 }
 
 async function exportWS(fmt, btn) {
